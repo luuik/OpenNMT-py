@@ -6,11 +6,14 @@ from onmt.modules.CopyGenerator import CopyGenerator, CopyCriterion
 from onmt.modules.StructuredAttention import MatrixTree
 from onmt.modules.Transformer import TransformerEncoder, TransformerDecoder
 from onmt.modules.MultiHeadedAttn import MultiHeadedAttention
-from onmt.modules.StackedRNN import StackedLSTM, StackedGRU
+from onmt.modules.GORU import GORU, GORUCell
+from onmt.modules.StackedRNN import StackedLSTM, StackedGRU, StackedGORU
 
 
 # For flake8 compatibility.
 __all__ = [GlobalAttention, ImageEncoder, CopyGenerator, MultiHeadedAttention,
            LayerNorm, Bottle, BottleLinear, BottleLayerNorm, BottleSoftmax,
            TransformerEncoder, TransformerDecoder,
-           CopyCriterion, MatrixTree, StackedLSTM, StackedGRU, aeq]
+           CopyCriterion, MatrixTree, StackedLSTM, StackedGRU,
+           StackedGORU, GORUCell
+           aeq]

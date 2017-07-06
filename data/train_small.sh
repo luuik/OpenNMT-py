@@ -1,0 +1,3 @@
+#python preprocess.py -train_src data/src-train.txt -train_tgt data/tgt-train.txt -valid_src data/src-val.txt -valid_tgt data/tgt-val.txt -save_data data/data
+# python train.py -data data/data.train.pt -save_model /n/rush_lab/data/tmp_ -layers  4 -rnn_size 512  -word_vec_size 512 -batch_size 128 -epochs 25  -gpus 2 -log_interval 50  -max_grad_norm 1000000 -optim adam -encoder_layer transformer -decoder_layer transformer -position_encoding -dropout 0.1 -decay_method noam -param_init 0
+python train.py -data data/data.train.pt -save_model /n/rush_lab/data/tmp_ -layers  1 -rnn_size 100  -word_vec_size 256 -batch_size 32 -epochs 25  -gpus 1  -log_interval 1   -dropout 0.1 -rnn_type GORU -optim adagrad -learning_rate 0.001 -max_grad_norm 100  -param_init 0.001

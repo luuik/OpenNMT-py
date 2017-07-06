@@ -68,7 +68,7 @@ class StackedGORU(nn.Module):
         self.layers = nn.ModuleList()
 
         for i in range(num_layers):
-            self.layers.append(nn.GORUCell(input_size, rnn_size, 2))
+            self.layers.append(GORUCell(input_size, rnn_size, 2))
             input_size = rnn_size
 
     def forward(self, input, hidden):

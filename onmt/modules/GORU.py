@@ -16,9 +16,9 @@ class GORUCell(nn.Module):
         self.U = nn.Parameter(
             torch.FloatTensor(input_size, hidden_size))
         self.thetaA = nn.Parameter(
-            torch.FloatTensor(hidden_size/2, capacity/2))
+            torch.FloatTensor(hidden_size//2, capacity//2))
         self.thetaB = nn.Parameter(
-            torch.FloatTensor(hidden_size/2-1, capacity/2))
+            torch.FloatTensor(hidden_size//2-1, capacity//2))
         self.bias = nn.Parameter(
             torch.FloatTensor(hidden_size))
 
@@ -56,27 +56,27 @@ class GORUCell(nn.Module):
         sinB = torch.sin(self.thetaB)
         cosB = torch.cos(self.thetaB)
 
-        I = Variable(torch.ones((L/2, 1)))
-        O = Variable(torch.zeros((L/2, 1)))
+        I = Variable(torch.ones((L//2, 1)).float().cuda())
+        O = Variable(torch.zeros((L//2, 1)).float().cuda())
 
         diagA = torch.stack((cosA, cosA), 2)
         offA = torch.stack((-sinA, sinA), 2)
         diagB = torch.stack((cosB, cosB), 2)
         offB = torch.stack((-sinB, sinB), 2)
 
-        diagA = diagA.view(L/2, N)
-        offA = offA.view(L/2, N)
-        diagB = diagB.view(L/2, N-2)
-        offB = offB.view(L/2, N-2)
+        diagA = diagA.view(L//2, N)
+        offA = offA.view(L//2, N)
+        diagB = diagB.view(L//2, N-2)
+        offB = offB.view(L//2, N-2)
 
-        diagB = torch.cat((I, diagB, I), 1)
-        offB = torch.cat((O, offB, O), 1)
+        diagB = torch.cat([I, diagB, I], 1)
+        offB = torch.cat([O, offB, O], 1)
 
         batch_size = hx.size()[0]
         x = hx
-        for i in range(L/2):
+        for i in range(L//2):
 #             # A
-            y = x.view(batch_size, N/2, 2)
+            y = x.view(batch_size, N//2, 2)
             y = torch.stack((y[:,:,1], y[:,:,0]), 2)
             y = y.view(batch_size, N)
 
@@ -89,13 +89,13 @@ class GORUCell(nn.Module):
             x_top = x[:,0]
             x_mid = x[:,1:-1].contiguous()
             x_bot = x[:,-1]
-            y = x_mid.view(batch_size, N/2-1, 2)
+            y = x_mid.view(batch_size, N//2-1, 2)
             y = torch.stack((y[:, :, 1], y[:, :, 0]), 1)
             y = y.view(batch_size, N-2)
             x_top = torch.unsqueeze(x_top, 1)
             x_bot = torch.unsqueeze(x_bot, 1)
             # print x_top.size(), y.size(), x_bot.size()
-            y = torch.cat((x_top, y, x_bot), 1)
+            y = torch.cat([x_top, y, x_bot], 1)
 
             x = x * diagB[i].expand(batch_size, N)
             y = y * offB[i].expand(batch_size, N)

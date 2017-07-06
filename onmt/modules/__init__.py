@@ -15,5 +15,5 @@ __all__ = [GlobalAttention, ImageEncoder, CopyGenerator, MultiHeadedAttention,
            LayerNorm, Bottle, BottleLinear, BottleLayerNorm, BottleSoftmax,
            TransformerEncoder, TransformerDecoder,
            CopyCriterion, MatrixTree, StackedLSTM, StackedGRU,
-           StackedGORU, GORUCell
+           StackedGORU, GORUCell,
            aeq]

@@ -123,10 +123,10 @@ class Encoder(nn.Module):
             if opt.rnn_type == "GORU":
                 rnn_type = GORU
             self.rnn = rnn_type(
-                 input_size, self.hidden_size,
-                 num_layers=opt.layers,
-                 dropout=opt.dropout,
-                 bidirectional=opt.brnn)
+                 input_size, self.hidden_size)
+                 #num_layers=opt.layers,
+                 #dropout=opt.dropout,
+                 #bidirectional=opt.brnn)
 
     def forward(self, input, lengths=None, hidden=None):
         """
@@ -165,13 +165,16 @@ class Encoder(nn.Module):
         else:
             # Standard RNN encoder.
             packed_emb = emb
-            if lengths is not None:
-                # Lengths data is wrapped inside a Variable.
-                lengths = lengths.data.view(-1).tolist()
-                packed_emb = pack(emb, lengths)
+            # if lengths is not None:
+            #     # Lengths data is wrapped inside a Variable.
+            #     lengths = lengths.data.view(-1).tolist()
+            #     packed_emb = pack(emb, lengths)
+            # print(packed_emb.size(), hidden)
+            # print(packed_emb)
             outputs, hidden_t = self.rnn(packed_emb, hidden)
-            if lengths:
-                outputs = unpack(outputs)[0]
+            # print(hidden_t)
+            # if lengths:
+            #     outputs = unpack(outputs)[0]
             return hidden_t, outputs
 
 

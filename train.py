@@ -204,6 +204,7 @@ def eval(model, criterion, data):
 
 
 def trainModel(model, trainData, validData, dataset, optim):
+    print(model)
     model.train()
 
     # Define criterion of each GPU.

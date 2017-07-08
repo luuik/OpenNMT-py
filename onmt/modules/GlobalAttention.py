@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from onmt.modules.Util import BottleLinear
 from onmt.modules import aeq
-
+from onmt.modules.activations import Softmax, Sparsemax, ConstrainedSoftmax
 
 class GlobalAttention(nn.Module):
     """
@@ -34,7 +34,8 @@ class GlobalAttention(nn.Module):
     $$a_j = softmax(v_a^T \tanh(W_a q + U_a h_j) )$$.
 
     """
-    def __init__(self, dim, coverage=False, attn_type="dotprod"):
+    def __init__(self, dim, coverage=False, attn_type="dotprod",
+                 attn_transform="softmax"):
         super(GlobalAttention, self).__init__()
 
         self.dim = dim
@@ -50,7 +51,16 @@ class GlobalAttention(nn.Module):
             self.linear_query = nn.Linear(dim, dim, bias=False)
             self.v = BottleLinear(dim, 1, bias=False)
 
-        self.sm = nn.Softmax()
+        if attn_transform == 'softmax':
+            self.sm = nn.Softmax()
+        elif attn_transform == 'sparsemax':
+            self.sm = Sparsemax()
+        elif attn_transform == 'constrained_softmax':
+            self.sm = ConstrainedSoftmax()
+        else:
+            raise NotImplementedError
+        self.attn_transform = attn_transform
+
         self.tanh = nn.Tanh()
         self.mask = None
 
@@ -60,11 +70,12 @@ class GlobalAttention(nn.Module):
     def applyMask(self, mask):
         self.mask = mask
 
-    def forward(self, input, context, coverage=None):
+    def forward(self, input, context, coverage=None, upper_bounds=None):
         """
         input (FloatTensor): batch x dim
         context (FloatTensor): batch x sourceL x dim
         coverage (FloatTensor): batch x sourceL
+        upper_bounds (FloatTensor): batch x sourceL
         """
         # Check input sizes
         batch, sourceL, dim = context.size()
@@ -108,7 +119,17 @@ class GlobalAttention(nn.Module):
         if self.mask is not None:
             attn.data.masked_fill_(self.mask, -float('inf'))
 
-        attn = self.sm(attn)
+        if self.attn_transform == 'constrained_softmax':
+            if upper_bounds is None:
+                attn = nn.Softmax()(attn)
+            else:
+                attn = self.sm(attn, upper_bounds)
+        else:
+            attn = self.sm(attn)
+            #if upper_bounds is None:
+            #    attn = self.sm(attn)
+            #else:
+            #    attn = self.sm(attn - upper_bounds)
 
         # Compute context weighted by attention.
         # batch x 1 x sourceL

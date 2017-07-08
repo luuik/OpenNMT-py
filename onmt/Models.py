@@ -213,9 +213,13 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(opt.dropout)
 
         # Std attention layer.
-        self.attn = onmt.modules.GlobalAttention(opt.rnn_size,
-                                                 coverage=self._coverage,
-                                                 attn_type=opt.attention_type)
+        self.attn = onmt.modules.GlobalAttention(
+            opt.rnn_size,
+            coverage=self._coverage,
+            attn_type=opt.attention_type,
+            #attn_transform='sparsemax'
+            attn_transform='constrained_softmax'
+        )
 
         # Separate Copy Attention.
         self._copy = False
@@ -295,6 +299,16 @@ class Decoder(nn.Module):
             coverage = state.coverage.squeeze(0) \
                 if state.coverage is not None else None
 
+            # NOTE: something goes wrong when I try to define a "upper_bounds"
+            # variable here -- memory blows up. Apparently the presence of such
+            # variable prevents the computation graph to be deleted after
+            # processing each batch. I need to investigate this further.
+            # A workaround for now is to do one round of softmax (without
+            # upper bound constraints) followed by several rounds of constrained
+            # softmax.
+            #upper_bounds = Variable(torch.ones(attn.size()).cuda())
+            upper_bounds = None
+
             # Standard RNN decoder.
             for i, emb_t in enumerate(emb.split(1)):
                 emb_t = emb_t.squeeze(0)
@@ -303,7 +317,15 @@ class Decoder(nn.Module):
 
                 rnn_output, hidden = self.rnn(emb_t, hidden)
                 attn_output, attn = self.attn(rnn_output,
-                                              context.transpose(0, 1))
+                                              context.transpose(0, 1),
+                                              upper_bounds=upper_bounds)
+                if upper_bounds is None:
+                    max_word_coverage = max(
+                        2., float(emb.size(0)) / context.size(0))
+                    upper_bounds = -attn + max_word_coverage
+                else:
+                    upper_bounds -= attn
+
                 if self.context_gate is not None:
                     output = self.context_gate(
                         emb_t, rnn_output, attn_output

@@ -60,7 +60,7 @@ class GlobalAttention(nn.Module):
         else:
             raise NotImplementedError
         self.attn_transform = attn_transform
-
+        
         self.tanh = nn.Tanh()
         self.mask = None
 

@@ -22,6 +22,30 @@ def project_onto_simplex(a, radius=1.0):
     x[ind_sort] = y
     return x, tau, .5*np.dot(x-a, x-a)
 
+def constrained_softmax(z, u):
+    p = np.zeros_like(z)
+    active = np.ones_like(z)
+    nz = np.nonzero(u)[0]
+    z = z[nz]
+    u = u[nz]
+    active[nz] = 0.
+    z -= np.mean(z)
+    e_z = np.exp(z)
+    Z = e_z.sum()
+    ind = np.argsort(-e_z / u)
+    s = 0.
+    for i in ind:
+        val = e_z[i] * (1-s) / Z
+        if val > u[i]:
+            val = u[i]
+            Z -= e_z[i]
+            s += val
+            active[nz[i]] = 1.
+        p[nz[i]] = val
+    #if np.any(np.isnan(p)):
+    #    import pdb; pdb.set_trace()
+    return p, active, s
+
 class SoftmaxFunction(Function):
     def forward(self, input):
         e_z = input.exp()
@@ -81,29 +105,55 @@ class Sparsemax(Module):
 
 class ConstrainedSoftmaxFunction(Function):
     def forward(self, input1, input2):
-        z = input1
-        u = input2
-        e_z = z.exp()
-        Z = e_z.sum(1)
-        probs = e_z / Z.expand_as(e_z)
-        active = (probs > u).type(probs.type())
-        s = (active * u).sum(1)
-        Z = ((1. - active) * e_z).sum(1) / (1-s)
-        probs = active * u + (1. - active) * (e_z / Z.expand_as(z))
-        output = probs
-        self.save_for_backward(output)
+        z = input1.cpu().numpy()
+        u = input2.cpu().numpy()
+        probs = np.zeros_like(z)
+        active = np.zeros_like(z)
+        s = np.zeros_like(z[:,0])
+        for i in xrange(z.shape[0]):
+            probs[i,:], active[i,:], s[i] = constrained_softmax(z[i], u[i])
+        probs = torch.from_numpy(probs)
+        active = torch.from_numpy(active)
+        s = torch.from_numpy(s)
+        if input1.is_cuda:
+            probs = probs.cuda()
+            active = active.cuda()
+            s = s.cuda()
+        self.save_for_backward(probs)
         self.saved_intermediate = active, s # Not sure this is safe.
-        return output
+        return probs
+
+        #z = input1
+        #u = input2
+        #e_z = z.exp()
+        #Z = e_z.sum(1)
+        #probs = e_z / Z.expand_as(e_z)
+        #active = (probs > u).type(probs.type())
+        #s = (active * u).sum(1)
+        #Z = ((1. - active) * e_z).sum(1) / (1-s)
+        #probs = active * u + (1. - active) * (e_z / Z.expand_as(z))
+        #output = probs
+        #self.save_for_backward(output)
+        #self.saved_intermediate = active, s # Not sure this is safe.
+        #return output
 
     def backward(self, grad_output):
         output, = self.saved_tensors
         active, s = self.saved_intermediate
         probs = output
         m = ((1. - active) * probs * grad_output).sum(1) / (1. - s)
+        # If all are active, then sum(u) = 1, s = 1, p = u, so we need to do
+        # the following to avoid nans.
+        ind = active.sum(1) == active.size(1)
+        m[ind] = 0.
         grad_z = (1. - active) * probs * (grad_output - m.expand_as(active))
         grad_u = active * (grad_output - m.expand_as(active))
         grad_input1 = grad_z
         grad_input2 = grad_u
+        #if np.any(np.isnan(grad_z.cpu().numpy())):
+        #    import pdb; pdb.set_trace()
+        #if np.any(np.isnan(grad_u.cpu().numpy())):
+        #    import pdb; pdb.set_trace()
         return grad_input1, grad_input2
 
 class ConstrainedSoftmax(Module):

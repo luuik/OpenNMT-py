@@ -73,7 +73,12 @@ if __name__ == "__main__":
     z = Variable(torch.randn(batch_size, n).double().cuda(), requires_grad=True)
     u = Variable(0.5 * torch.rand(batch_size, n).double().cuda(),
                  requires_grad=True)
+    #z = Variable(torch.from_numpy(np.array([[1.,1.,1.,1.,1.,1.,1.,1.]])).cuda(),
+    #             requires_grad=True)
+    #u = Variable(torch.from_numpy(np.array([[.15,.167,1.,0.,1.,1.,0.,1.]])).cuda(),
+    #             requires_grad=True)
     p = ConstrainedSoftmax()(z, u)
+    assert (1 - (p <= u)).cpu().data.numpy().sum() == 0, pdb.set_trace()
     dp = torch.randn(batch_size, n).double().cuda()
     p.backward(dp)
     dz = z.grad.data

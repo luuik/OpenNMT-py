@@ -26,6 +26,9 @@ class Translator(object):
 
         self.copy_attn = model_opt.copy_attn \
             if "copy_attn" in model_opt else "std"
+        
+        self.predict_fertility = model_opt.predict_fertility \
+            if "predict_fertility" in model_opt else False
 
         if self._type == "text":
             encoder = onmt.Models.Encoder(model_opt, self.src_dict,

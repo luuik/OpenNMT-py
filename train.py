@@ -29,11 +29,11 @@ parser.add_argument('-train_from', default='', type=str,
 
 # Model options
 
-parser.add_argument('-layers', type=int, default=2,
+parser.add_argument('-layers', type=int, default=1,
                     help='Number of layers in the LSTM encoder/decoder')
-parser.add_argument('-rnn_size', type=int, default=500,
+parser.add_argument('-rnn_size', type=int, default=512,
                     help='Size of LSTM hidden states')
-parser.add_argument('-word_vec_size', type=int, default=500,
+parser.add_argument('-word_vec_size', type=int, default=512,
                     help='Word embedding sizes')
 parser.add_argument('-feature_vec_size', type=int, default=100,
                     help='Feature vec sizes')
@@ -47,7 +47,7 @@ parser.add_argument('-rnn_type', type=str, default='LSTM',
                     help="""The gate type to use in the RNNs""")
 # parser.add_argument('-residual',   action="store_true",
 #                     help="Add residual connections between RNN layers.")
-parser.add_argument('-brnn', action='store_true',
+parser.add_argument('-brnn', action='store_true', default=True,
                     help='Use a bidirectional encoder')
 parser.add_argument('-brnn_merge', default='concat',
                     help="""Merge action for the bidirectional hidden states:
@@ -77,6 +77,8 @@ parser.add_argument('-attn_transform', type=str, default='softmax',
                     help="""The attention transform to use""")
 parser.add_argument('-fertility', type=float, default=2.0,
                     help="""Constant fertility value for each word in the source""")
+parser.add_argument('-predict_fertility', action="store_true",
+                    help="""Predict fertility value for each word in the source""")
  
 # Optimization options
 parser.add_argument('-encoder_type', default='text',

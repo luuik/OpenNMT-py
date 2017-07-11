@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
+import torch.nn.functional as F 
 import onmt
 import onmt.modules
 from onmt.modules import aeq
@@ -121,6 +122,13 @@ class Encoder(nn.Module):
                  num_layers=opt.layers,
                  dropout=opt.dropout,
                  bidirectional=opt.brnn)
+        
+        self.predict_fertility = opt.predict_fertility
+       
+        if self.predict_fertility:
+          self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions, self.hidden_size)
+          self.fertility_out = nn.Linear(self.hidden_size, 1, bias=False)
+
 
     def forward(self, input, lengths=None, hidden=None):
         """
@@ -166,7 +174,13 @@ class Encoder(nn.Module):
             outputs, hidden_t = self.rnn(packed_emb, hidden)
             if lengths:
                 outputs = unpack(outputs)[0]
-            return hidden_t, outputs
+            if self.predict_fertility:
+              fertility_vals = F.tanh(self.fertility_linear(outputs.view(-1, self.hidden_size * self.num_directions)))
+              fertility_vals = F.softplus(self.fertility_out(fertility_vals))
+              fertility_vals = fertility_vals.view(n_batch, s_len)
+            else:
+              fertility_vals = None
+            return hidden_t, outputs, fertility_vals
 
 
 class Decoder(nn.Module):
@@ -221,7 +235,7 @@ class Decoder(nn.Module):
             attn_transform=opt.attn_transform
         )
         self.fertility = opt.fertility        
-
+        self.predict_fertility = opt.predict_fertility
         # Separate Copy Attention.
         self._copy = False
         if opt.copy_attn:
@@ -229,7 +243,7 @@ class Decoder(nn.Module):
                 opt.rnn_size, attn_type=opt.attention_type)
             self._copy = True
 
-    def forward(self, input, src, context, state):
+    def forward(self, input, src, context, state, fertility_vals=None):
         """
         Forward through the decoder.
 
@@ -256,7 +270,6 @@ class Decoder(nn.Module):
                 input = torch.cat([state.previous_input.squeeze(2), input], 0)
 
         emb = self.embeddings(input.unsqueeze(2))
-
         # n.b. you can increase performance if you compute W_ih * x for all
         # iterations in parallel, but that's only possible if
         # self.input_feed=False
@@ -320,10 +333,18 @@ class Decoder(nn.Module):
                 attn_output, attn = self.attn(rnn_output,
                                               context.transpose(0, 1),
                                               upper_bounds=upper_bounds)
+ 
+                # Initialize upper bounds for the current batch
                 if upper_bounds is None:
-                    max_word_coverage = max(
-                        self.fertility, float(emb.size(0)) / context.size(0))
+                    if self.predict_fertility:
+                      comp_tensor = torch.Tensor([float(emb.size(0)) / context.size(0)]).repeat(n_batch_, s_len_).cuda()
+                      max_word_coverage = Variable(torch.max(fertility_vals.data, comp_tensor))
+                    else:
+                      max_word_coverage = max(
+                          self.fertility, float(emb.size(0)) / context.size(0))
                     upper_bounds = -attn + max_word_coverage
+
+                # Update upper bounds
                 else:
                     upper_bounds -= attn
 
@@ -397,11 +418,11 @@ class NMTModel(nn.Module):
         """
         src = src
         tgt = tgt[:-1]  # exclude last target from inputs
-        enc_hidden, context = self.encoder(src, lengths)
+        enc_hidden, context, fertility_vals = self.encoder(src, lengths)
         enc_state = self.init_decoder_state(context, enc_hidden)
         out, dec_state, attns = self.decoder(tgt, src, context,
                                              enc_state if dec_state is None
-                                             else dec_state)
+                                             else dec_state, fertility_vals)
         if self.multigpu:
             # Not yet supported on multi-gpu
             dec_state = None

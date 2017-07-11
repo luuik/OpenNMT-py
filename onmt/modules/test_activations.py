@@ -78,6 +78,11 @@ if __name__ == "__main__":
     #u = Variable(torch.from_numpy(np.array([[.15,.167,1.,0.,1.,1.,0.,1.]])).cuda(),
     #             requires_grad=True)
     p = ConstrainedSoftmax()(z, u)
+    print("p:", p)
+    print("u:", u)
+    print("u >= p", torch.le(p, u))
+    all_ones = torch.ones(batch_size, n).double().cuda()
+    assert torch.equal(all_ones, torch.le(p, u).data.double().cuda()),"Probabilities are greater than the upper bounds!"
     assert (1 - (p <= u)).cpu().data.numpy().sum() == 0, pdb.set_trace()
     dp = torch.randn(batch_size, n).double().cuda()
     p.backward(dp)

@@ -116,8 +116,7 @@ def main():
 
         for b in range(len(predBatch)):
             count += 1
-            outF.write(" ".join([i.decode('utf-8')
-                                 for i in predBatch[b][0]]) + '\n')
+            outF.write(" ".join([i for i in predBatch[b][0]]) + '\n')
             outF.flush()
 
             if opt.verbose:

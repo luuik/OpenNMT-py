@@ -8,7 +8,7 @@ from onmt.modules.Gate import ContextGateFactory
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 import math
-
+import pdb
 
 class Embeddings(nn.Module):
     def __init__(self, opt, dicts, feature_dicts=None):
@@ -218,8 +218,9 @@ class Decoder(nn.Module):
             coverage=self._coverage,
             attn_type=opt.attention_type,
             #attn_transform='sparsemax'
-            attn_transform='constrained_softmax'
+            attn_transform=opt.attn_transform
         )
+        self.fertility = opt.fertility        
 
         # Separate Copy Attention.
         self._copy = False
@@ -321,7 +322,7 @@ class Decoder(nn.Module):
                                               upper_bounds=upper_bounds)
                 if upper_bounds is None:
                     max_word_coverage = max(
-                        2., float(emb.size(0)) / context.size(0))
+                        self.fertility, float(emb.size(0)) / context.size(0))
                     upper_bounds = -attn + max_word_coverage
                 else:
                     upper_bounds -= attn

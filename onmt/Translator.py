@@ -71,7 +71,7 @@ class Translator(object):
         if self.src_feature_dicts:
             srcFeats = [[] for i in range(len(self.src_feature_dicts))]
         srcData = []
-        tgtData = None
+        tgtData = []
         for b in srcBatch:
             _, srcD, srcFeat = onmt.IO.readSrcLine(b, self.src_dict,
                                                    self.src_feature_dicts,

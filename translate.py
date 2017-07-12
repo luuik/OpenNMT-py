@@ -27,7 +27,7 @@ parser.add_argument('-output', default='pred.txt',
                     be the decoded sequence""")
 parser.add_argument('-beam_size',  type=int, default=5,
                     help='Beam size')
-parser.add_argument('-batch_size', type=int, default=30,
+parser.add_argument('-batch_size', type=int, default=1,
                     help='Batch size')
 parser.add_argument('-max_sent_length', type=int, default=100,
                     help='Maximum sentence length.')
@@ -55,7 +55,6 @@ parser.add_argument('-n_best', type=int, default=1,
 
 parser.add_argument('-gpu', type=int, default=-1,
                     help="Device to run on")
-
 
 def reportScore(name, scoreTotal, wordsTotal):
     print("%s AVG SCORE: %.4f, %s PPL: %.4f" % (

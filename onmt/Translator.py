@@ -109,7 +109,7 @@ class Translator(object):
         batchSize = batch.batchSize
 
         #  (1) run the encoder on the src
-        encStates, context = self.model.encoder(batch.src)
+        encStates, context, fertility_vals = self.model.encoder(batch.src)
         encStates = self.model.init_decoder_state(context, encStates)
 
         decoder = self.model.decoder
@@ -132,8 +132,9 @@ class Translator(object):
         if batch.tgt is not None:
             decStates = encStates
             mask(padMask)
-            decOut, decStates, attn = decoder(batch.tgt[:-1],
-                                              context, decStates)
+            decOut, decStates, attn, _ = decoder(batch.tgt[:-1],
+                                                 context, decStates, 
+                                                 fertility_vals)
             for dec_t, tgt_t in zip(decOut, batch.tgt[1:].data):
                 gen_t = self.model.generator.forward(dec_t)
                 tgt_t = tgt_t.unsqueeze(1)
@@ -157,14 +158,16 @@ class Translator(object):
                                    .repeat(beamSize, 1, 1)
 
         #  (3b) The main loop
+        upper_bounds = None
         for i in range(self.opt.max_sent_length):
             # (a) Run RNN decoder forward one step.
             mask(padMask)
             input = torch.stack([b.getCurrentState() for b in beam])\
                          .t().contiguous().view(1, -1)
             input = Variable(input, volatile=True)
-            decOut, decStates, attn = self.model.decoder(input, batch_src,
-                                                         context, decStates)
+            decOut, decStates, attn, upper_bounds = self.model.decoder(input, batch_src,
+                                                         context, decStates,
+                                                         fertility_vals, upper_bounds)
             decOut = decOut.squeeze(0)
             # decOut: (beam*batch) x numWords
             attn["std"] = attn["std"].view(beamSize, batchSize, -1) \

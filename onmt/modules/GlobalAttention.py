@@ -3,6 +3,7 @@ import torch.nn as nn
 from onmt.modules.Util import BottleLinear
 from onmt.modules import aeq
 from onmt.modules.activations import Softmax, Sparsemax, ConstrainedSoftmax
+import pdb
 
 class GlobalAttention(nn.Module):
     """
@@ -118,7 +119,6 @@ class GlobalAttention(nn.Module):
 
         if self.mask is not None:
             attn.data.masked_fill_(self.mask, -float('inf'))
-
         if self.attn_transform == 'constrained_softmax':
             if upper_bounds is None:
                 attn = nn.Softmax()(attn)

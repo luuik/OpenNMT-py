@@ -243,7 +243,7 @@ class Decoder(nn.Module):
                 opt.rnn_size, attn_type=opt.attention_type)
             self._copy = True
 
-    def forward(self, input, src, context, state, fertility_vals=None):
+    def forward(self, input, src, context, state, fertility_vals=None, upper_bounds=None):
         """
         Forward through the decoder.
 
@@ -268,7 +268,6 @@ class Decoder(nn.Module):
         if self.decoder_layer == "transformer":
             if state.previous_input:
                 input = torch.cat([state.previous_input.squeeze(2), input], 0)
-
         emb = self.embeddings(input.unsqueeze(2))
         # n.b. you can increase performance if you compute W_ih * x for all
         # iterations in parallel, but that's only possible if
@@ -321,7 +320,6 @@ class Decoder(nn.Module):
             # upper bound constraints) followed by several rounds of constrained
             # softmax.
             #upper_bounds = Variable(torch.ones(attn.size()).cuda())
-            upper_bounds = None
 
             # Standard RNN decoder.
             for i, emb_t in enumerate(emb.split(1)):
@@ -333,7 +331,6 @@ class Decoder(nn.Module):
                 attn_output, attn = self.attn(rnn_output,
                                               context.transpose(0, 1),
                                               upper_bounds=upper_bounds)
- 
                 # Initialize upper bounds for the current batch
                 if upper_bounds is None:
                     if self.predict_fertility:
@@ -343,11 +340,8 @@ class Decoder(nn.Module):
                       max_word_coverage = max(
                           self.fertility, float(emb.size(0)) / context.size(0))
                     upper_bounds = -attn + max_word_coverage
-
-                # Update upper bounds
                 else:
                     upper_bounds -= attn
-
                 if self.context_gate is not None:
                     output = self.context_gate(
                         emb_t, rnn_output, attn_output
@@ -374,7 +368,7 @@ class Decoder(nn.Module):
             outputs = torch.stack(outputs)
             for k in attns:
                 attns[k] = torch.stack(attns[k])
-        return outputs, state, attns
+        return outputs, state, attns, upper_bounds
 
 
 class NMTModel(nn.Module):
@@ -420,7 +414,7 @@ class NMTModel(nn.Module):
         tgt = tgt[:-1]  # exclude last target from inputs
         enc_hidden, context, fertility_vals = self.encoder(src, lengths)
         enc_state = self.init_decoder_state(context, enc_hidden)
-        out, dec_state, attns = self.decoder(tgt, src, context,
+        out, dec_state, attns, _ = self.decoder(tgt, src, context,
                                              enc_state if dec_state is None
                                              else dec_state, fertility_vals)
         if self.multigpu:

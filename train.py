@@ -1,5 +1,5 @@
 from __future__ import division
-
+import evaluation
 import onmt
 import onmt.Markdown
 import onmt.Models
@@ -120,7 +120,7 @@ parser.add_argument('-truncated_decoder', type=int, default=0,
                     help="""Truncated bptt.""")
 
 # learning rate
-parser.add_argument('-learning_rate', type=float, default=1.0,
+parser.add_argument('-learning_rate', type=float, default=1,
                     help="""Starting learning rate. If adagrad/adadelta/adam is
                     used, then this is the global learning rate. Recommended
                     settings: sgd = 1, adagrad = 0.1,

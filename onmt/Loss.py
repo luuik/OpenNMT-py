@@ -6,7 +6,7 @@ from torch.autograd import Variable
 import time
 import sys
 import math
-
+import pdb
 
 def NMTCriterion(vocabSize, opt):
     """
@@ -117,7 +117,6 @@ class MemoryEfficientLoss:
         self.copy_loss = copy_loss
         self.lambda_coverage = opt.lambda_coverage
         self.coverage_loss = coverage_loss
-
     def score(self, loss_t, scores_t, targ_t):
         pred_t = scores_t.data.max(1)[1]
         non_padding = targ_t.ne(onmt.Constants.PAD).data
@@ -174,8 +173,7 @@ class MemoryEfficientLoss:
                     bottle(s["attn_t"]), bottle(s["align_t"]))
 
             if self.coverage_loss:
-                loss_t += self.lambda_coverage * torch.min(s["coverage"],
-                                                           s["attn"]).sum()
+                loss_t += self.lambda_coverage * torch.min(s["coverage_t"], s["attn_t"]).sum()
 
             stats.update(self.score(loss_t, scores_t, s["targ_t"]))
             if not self.eval:

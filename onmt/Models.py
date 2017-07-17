@@ -126,8 +126,9 @@ class Encoder(nn.Module):
         self.predict_fertility = opt.predict_fertility
        
         if self.predict_fertility:
-          self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions, self.hidden_size)
-          self.fertility_out = nn.Linear(self.hidden_size, 1, bias=False)
+          #self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions, 1)
+          self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions, self.hidden_size * self.num_directions)
+          self.fertility_out = nn.Linear(self.hidden_size * self.num_directions, 1, bias=False)
 
 
     def forward(self, input, lengths=None, hidden=None):
@@ -164,6 +165,7 @@ class Encoder(nn.Module):
             for i in range(self.layers):
                 out = self.transformer[i](out, input[:, :, 0].transpose(0, 1))
             return Variable(emb.data), out.transpose(0, 1).contiguous()
+
         else:
             # Standard RNN encoder.
             packed_emb = emb
@@ -177,6 +179,7 @@ class Encoder(nn.Module):
             if self.predict_fertility:
               fertility_vals = F.tanh(self.fertility_linear(outputs.view(-1, self.hidden_size * self.num_directions)))
               fertility_vals = F.softplus(self.fertility_out(fertility_vals))
+              #fertility_vals = F.softplus(self.fertility_linear(outputs.view(-1, self.hidden_size * self.num_directions)))
               fertility_vals = fertility_vals.view(n_batch, s_len)
             else:
               fertility_vals = None
@@ -187,6 +190,7 @@ class Decoder(nn.Module):
     """
     Decoder + Attention recurrent neural network.
     """
+
 
     def __init__(self, opt, dicts):
         """
@@ -231,11 +235,11 @@ class Decoder(nn.Module):
             opt.rnn_size,
             coverage=self._coverage,
             attn_type=opt.attention_type,
-            #attn_transform='sparsemax'
             attn_transform=opt.attn_transform
         )
         self.fertility = opt.fertility        
         self.predict_fertility = opt.predict_fertility
+
         # Separate Copy Attention.
         self._copy = False
         if opt.copy_attn:
@@ -263,6 +267,8 @@ class Decoder(nn.Module):
         s_len, n_batch_, _ = src.size()
         s_len_, n_batch__, _ = context.size()
         aeq(n_batch, n_batch_, n_batch__)
+        print("s_len:", s_len)
+        print("n_batch:", n_batch_)
         # aeq(s_len, s_len_)
         # END CHECKS
         if self.decoder_layer == "transformer":
@@ -320,7 +326,6 @@ class Decoder(nn.Module):
             # upper bound constraints) followed by several rounds of constrained
             # softmax.
             #upper_bounds = Variable(torch.ones(attn.size()).cuda())
-
             # Standard RNN decoder.
             for i, emb_t in enumerate(emb.split(1)):
                 emb_t = emb_t.squeeze(0)
@@ -334,14 +339,19 @@ class Decoder(nn.Module):
                 # Initialize upper bounds for the current batch
                 if upper_bounds is None:
                     if self.predict_fertility:
-                      comp_tensor = torch.Tensor([float(emb.size(0)) / context.size(0)]).repeat(n_batch_, s_len_).cuda()
+                      comp_tensor = torch.Tensor([1.1]).repeat(n_batch_, s_len_).cuda()
+                      #comp_tensor = torch.Tensor([float(emb.size(0)) / context.size(0)]).repeat(n_batch_, s_len_).cuda()
                       max_word_coverage = Variable(torch.max(fertility_vals.data, comp_tensor))
                     else:
                       max_word_coverage = max(
                           self.fertility, float(emb.size(0)) / context.size(0))
                     upper_bounds = -attn + max_word_coverage
+
                 else:
                     upper_bounds -= attn
+
+                print("upper bounds:", upper_bounds)
+
                 if self.context_gate is not None:
                     output = self.context_gate(
                         emb_t, rnn_output, attn_output
@@ -412,6 +422,7 @@ class NMTModel(nn.Module):
         """
         src = src
         tgt = tgt[:-1]  # exclude last target from inputs
+        #print("src:", src)
         enc_hidden, context, fertility_vals = self.encoder(src, lengths)
         enc_state = self.init_decoder_state(context, enc_hidden)
         out, dec_state, attns, _ = self.decoder(tgt, src, context,

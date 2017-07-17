@@ -9,7 +9,7 @@ import argparse
 import math
 import codecs
 import os
-
+import evaluation
 
 parser = argparse.ArgumentParser(description='translate.py')
 onmt.Markdown.add_md_help_argument(parser)
@@ -107,6 +107,9 @@ def main():
 
         predBatch, predScore, goldScore, attn, src \
             = translator.translate(srcBatch, tgtBatch)
+
+        evaluation.plot_heatmap(attn, 0, srcBatch[0], predBatch[0][0])
+
         predScoreTotal += sum(score[0] for score in predScore)
         predWordsTotal += sum(len(x[0]) for x in predBatch)
         if tgtF is not None:

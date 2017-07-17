@@ -8,6 +8,10 @@ import subprocess
 import argparse
 import pyter
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import torch
 
 parser = argparse.ArgumentParser(description='evaluate.py')
 parser.add_argument('-ref_file', required=True,
@@ -54,6 +58,21 @@ def ter_score(ref_file, hyp_file):
     ter_list = [pyter.ter(hyp, ref) for hyp, ref in zip(hypothesis, references)]
 
     return sum(ter_list)/len(ter_list), av_ref_len, av_hyp_len
+
+def plot_heatmap(att_weights, idx, srcSent, tgtSent):
+
+    plt.figure(figsize=(8, 6), dpi=80)
+    att_weights = att_weights[0][0].cpu().numpy()
+    #print("Att_weights", att_weights)
+    plt.imshow(att_weights, cmap='gray', interpolation='nearest')
+    srcSent = [str(s) for s in srcSent]
+    tgtSent = [str(s) for s in tgtSent]
+    
+    plt.xticks(range(0, len(tgtSent)),tgtSent)
+    plt.yticks(range(0, len(srcSent)),srcSent)
+    plt.savefig("softmax_att_matrix_"+str(idx), bbox_inches='tight')
+    plt.close()
+
 
 def main():
     opt = parser.parse_args()

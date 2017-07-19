@@ -5,7 +5,8 @@ import onmt.IO
 import torch.nn as nn
 import torch
 from torch.autograd import Variable
-
+import evaluation
+import pdb
 
 class Translator(object):
     def __init__(self, opt):
@@ -111,6 +112,8 @@ class Translator(object):
         #  (1) run the encoder on the src
         encStates, context, fertility_vals = self.model.encoder(batch.src)
         encStates = self.model.init_decoder_state(context, encStates)
+        if fertility_vals is not None:
+            fertility_vals = fertility_vals.repeat(beamSize*batchSize, 1)       
 
         decoder = self.model.decoder
         attentionLayer = decoder.attn
@@ -135,6 +138,7 @@ class Translator(object):
             decOut, decStates, attn, _ = decoder(batch.tgt[:-1],
                                                  context, decStates, 
                                                  fertility_vals)
+
             for dec_t, tgt_t in zip(decOut, batch.tgt[1:].data):
                 gen_t = self.model.generator.forward(dec_t)
                 tgt_t = tgt_t.unsqueeze(1)
@@ -168,6 +172,7 @@ class Translator(object):
             decOut, decStates, attn, upper_bounds = self.model.decoder(input, batch_src,
                                                          context, decStates,
                                                          fertility_vals, upper_bounds)
+
             decOut = decOut.squeeze(0)
             # decOut: (beam*batch) x numWords
             attn["std"] = attn["std"].view(beamSize, batchSize, -1) \

@@ -8,6 +8,8 @@ import argparse
 import torch
 import torch.nn as nn
 from torch import cuda
+import evaluation
+import pdb
 
 parser = argparse.ArgumentParser(description='train.py')
 onmt.Markdown.add_md_help_argument(parser)
@@ -56,9 +58,14 @@ parser.add_argument('-copy_attn', action="store_true",
                     help='Train copy attention layer.')
 parser.add_argument('-coverage_attn', action="store_true",
                     help='Train a coverage attention layer.')
+
+parser.add_argument('-exhaustion_loss', action="store_true",
+                    help='Train a loss to exhaust fertility')
 parser.add_argument('-lambda_coverage', type=float, default=1,
                     help='Lambda value for coverage.')
 
+parser.add_argument('-lambda_exhaust', type=float, default=0.4,
+                    help='Lambda value for exhaustion.')
 parser.add_argument('-encoder_layer', type=str, default='rnn',
                     help="""Type of encoder layer to use.
                     Options: [rnn|mean|transformer]""")
@@ -79,7 +86,8 @@ parser.add_argument('-fertility', type=float, default=2.0,
                     help="""Constant fertility value for each word in the source""")
 parser.add_argument('-predict_fertility', action="store_true",
                     help="""Predict fertility value for each word in the source""")
- 
+parser.add_argument('-guided_fertility', type=str, default=None,
+                    help="""Get fertility values from external aligner, specify alignment file""")
 # Optimization options
 parser.add_argument('-encoder_type', default='text',
                     help="Type of encoder to use. Options are [text|img].")
@@ -196,21 +204,21 @@ if opt.log_server != "":
     experiment = cc.create_experiment(opt.experiment_name)
 
 
-def eval(model, criterion, data):
+def eval(model, criterion, data, fert_dict):
     stats = onmt.Loss.Statistics()
     model.eval()
     loss = onmt.Loss.MemoryEfficientLoss(opt, model.generator, criterion,
                                          eval=True, copy_loss=opt.copy_attn)
     for i in range(len(data)):
         batch = data[i]
-        outputs, attn, dec_hidden = model(batch.src, batch.tgt, batch.lengths)
+        outputs, attn, dec_hidden, _ = model(batch.src, batch.tgt, batch.lengths, fert_dict)
         batch_stats, _, _ = loss.loss(batch, outputs, attn)
         stats.update(batch_stats)
     model.train()
     return stats
 
 
-def trainModel(model, trainData, validData, dataset, optim):
+def trainModel(model, trainData, validData, dataset, optim, fert_dict):
     print(model)
     model.train()
 
@@ -226,14 +234,14 @@ def trainModel(model, trainData, validData, dataset, optim):
 
         mem_loss = onmt.Loss.MemoryEfficientLoss(opt, model.generator,
                                                  criterion,
-                                                 copy_loss=opt.copy_attn)
-
+                                                 copy_loss=opt.copy_attn,
+                                                 exhaustion_loss=opt.exhaustion_loss)
         # Shuffle mini batch order.
         batchOrder = torch.randperm(len(trainData))
 
         total_stats = onmt.Loss.Statistics()
         report_stats = onmt.Loss.Statistics()
-
+       
         for i in range(len(trainData)):
             batchIdx = batchOrder[i] if epoch > opt.curriculum else i
             batch = trainData[batchIdx]
@@ -248,10 +256,11 @@ def trainModel(model, trainData, validData, dataset, optim):
 
                 # Main training loop
                 model.zero_grad()
-                outputs, attn, dec_state = model(trunc_batch.src,
+                outputs, attn, dec_state, upper_bounds = model(trunc_batch.src,
                                                  trunc_batch.tgt,
                                                  trunc_batch.lengths,
-                                                 dec_state)
+                                                 dec_state,
+                                                 fert_dict)
                 batch_stats, inputs, grads \
                     = mem_loss.loss(trunc_batch, outputs, attn)
 
@@ -284,7 +293,7 @@ def trainModel(model, trainData, validData, dataset, optim):
         print('Train accuracy: %g' % train_stats.accuracy())
 
         #  (2) evaluate on the validation set
-        valid_stats = eval(model, criterion, validData)
+        valid_stats = eval(model, criterion, validData, fert_dict)
         print('Validation perplexity: %g' % valid_stats.ppl())
         print('Validation accuracy: %g' % valid_stats.accuracy())
 
@@ -383,10 +392,8 @@ def main():
 
     if opt.train_from:
         print('Loading model from checkpoint at %s' % opt.train_from)
-        chk_model = checkpoint['model']
-        generator_state_dict = chk_model.generator.state_dict()
-        model_state_dict = {k: v for k, v in chk_model.state_dict().items()
-                            if 'generator' not in k}
+        model_state_dict = checkpoint['model']
+        generator_state_dict = checkpoint['generator']
         model.load_state_dict(model_state_dict)
         generator.load_state_dict(generator_state_dict)
         opt.start_epoch = checkpoint['epoch'] + 1
@@ -409,7 +416,6 @@ def main():
         print('Multi gpu training ', opt.gpus)
         model = nn.DataParallel(model, device_ids=opt.gpus, dim=1)
         generator = nn.DataParallel(generator, device_ids=opt.gpus, dim=0)
-
     model.generator = generator
 
     if not opt.train_from_state_dict and not opt.train_from:
@@ -433,15 +439,18 @@ def main():
         print(optim)
 
     optim.set_parameters(model.parameters())
-
+    if opt.guided_fertility: 
+      print('Getting fertilities from external alignments..')     
+      fert_dict = evaluation.get_fert_dict(opt.guided_fertility, "../dynet-att/en-de/iwslt2014/prep/bpe.train.de-en.de", dicts["src"])
+    else:
+      fert_dict = None
     if opt.train_from or opt.train_from_state_dict:
         optim.optimizer.load_state_dict(
             checkpoint['optim'].optimizer.state_dict())
 
     nParams = sum([p.nelement() for p in model.parameters()])
     print('* number of parameters: %d' % nParams)
-
-    trainModel(model, trainData, validData, dataset, optim)
+    trainModel(model, trainData, validData, dataset, optim, fert_dict)
 
 
 if __name__ == "__main__":

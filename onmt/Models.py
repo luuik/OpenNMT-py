@@ -10,6 +10,7 @@ from torch.nn.utils.rnn import pad_packed_sequence as unpack
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 import math
 import pdb
+import evaluation
 
 class Embeddings(nn.Module):
     def __init__(self, opt, dicts, feature_dicts=None):
@@ -129,7 +130,8 @@ class Encoder(nn.Module):
           #self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions, 1)
           self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions, self.hidden_size * self.num_directions)
           self.fertility_out = nn.Linear(self.hidden_size * self.num_directions, 1, bias=False)
-
+        
+        self.guided_fertility = opt.guided_fertility
 
     def forward(self, input, lengths=None, hidden=None):
         """
@@ -181,6 +183,8 @@ class Encoder(nn.Module):
               fertility_vals = F.softplus(self.fertility_out(fertility_vals))
               #fertility_vals = F.softplus(self.fertility_linear(outputs.view(-1, self.hidden_size * self.num_directions)))
               fertility_vals = fertility_vals.view(n_batch, s_len)
+            #elif self.guided_fertility:
+            #  fertility_vals = evaluations.get_fertility()
             else:
               fertility_vals = None
             return hidden_t, outputs, fertility_vals
@@ -201,6 +205,7 @@ class Decoder(nn.Module):
         self.layers = opt.layers
         self.decoder_layer = opt.decoder_layer
         self._coverage = opt.coverage_attn
+        self.exhaustion_loss = opt.exhaustion_loss
         self.hidden_size = opt.rnn_size
         self.input_feed = opt.input_feed
         input_size = opt.word_vec_size
@@ -239,7 +244,7 @@ class Decoder(nn.Module):
         )
         self.fertility = opt.fertility        
         self.predict_fertility = opt.predict_fertility
-
+        self.guided_fertility = opt.guided_fertility
         # Separate Copy Attention.
         self._copy = False
         if opt.copy_attn:
@@ -247,7 +252,7 @@ class Decoder(nn.Module):
                 opt.rnn_size, attn_type=opt.attention_type)
             self._copy = True
 
-    def forward(self, input, src, context, state, fertility_vals=None, upper_bounds=None):
+    def forward(self, input, src, context, state, fertility_vals=None, fert_dict=None, upper_bounds=None):
         """
         Forward through the decoder.
 
@@ -267,8 +272,8 @@ class Decoder(nn.Module):
         s_len, n_batch_, _ = src.size()
         s_len_, n_batch__, _ = context.size()
         aeq(n_batch, n_batch_, n_batch__)
-        print("s_len:", s_len)
-        print("n_batch:", n_batch_)
+        #print("s_len:", s_len)
+        #print("n_batch:", n_batch_)
         # aeq(s_len, s_len_)
         # END CHECKS
         if self.decoder_layer == "transformer":
@@ -286,7 +291,8 @@ class Decoder(nn.Module):
             attns["copy"] = []
         if self._coverage:
             attns["coverage"] = []
-
+        if self.exhaustion_loss:
+            attns["upper_bounds"] = []
         if self.decoder_layer == "transformer":
             # Tranformer Decoder.
             assert isinstance(state, TransformerDecoderState)
@@ -339,9 +345,15 @@ class Decoder(nn.Module):
                 # Initialize upper bounds for the current batch
                 if upper_bounds is None:
                     if self.predict_fertility:
-                      comp_tensor = torch.Tensor([1.1]).repeat(n_batch_, s_len_).cuda()
-                      #comp_tensor = torch.Tensor([float(emb.size(0)) / context.size(0)]).repeat(n_batch_, s_len_).cuda()
+                      #comp_tensor = torch.Tensor([1.1]).repeat(n_batch_, s_len_).cuda()
+                      comp_tensor = torch.Tensor([float(emb.size(0)) / context.size(0)]).repeat(n_batch_, s_len_).cuda()
+
                       max_word_coverage = Variable(torch.max(fertility_vals.data, comp_tensor))
+                    elif self.guided_fertility:
+                      comp_tensor = torch.Tensor([float(emb.size(0)) / context.size(0)]).repeat(n_batch_, s_len_).cuda()
+                      fertility_vals = evaluation.getBatchFertilities(fert_dict, src)
+                      max_word_coverage = Variable(torch.max(fertility_vals, comp_tensor))
+                      #print("max_word_coverage:", max_word_coverage)
                     else:
                       max_word_coverage = max(
                           self.fertility, float(emb.size(0)) / context.size(0))
@@ -350,7 +362,7 @@ class Decoder(nn.Module):
                 else:
                     upper_bounds -= attn
 
-                print("upper bounds:", upper_bounds)
+                #print("upper bounds:", upper_bounds)
 
                 if self.context_gate is not None:
                     output = self.context_gate(
@@ -372,6 +384,9 @@ class Decoder(nn.Module):
                     _, copy_attn = self.copy_attn(output,
                                                   context.transpose(0, 1))
                     attns["copy"] += [copy_attn]
+                if self.exhaustion_loss:
+                    attns["upper_bounds"] += [upper_bounds]       
+         
             state = RNNDecoderState(hidden, output.unsqueeze(0),
                                     coverage.unsqueeze(0)
                                     if coverage is not None else None)
@@ -408,7 +423,7 @@ class NMTModel(nn.Module):
         dec.init_input_feed(context, self.decoder.hidden_size)
         return dec
 
-    def forward(self, src, tgt, lengths, dec_state=None):
+    def forward(self, src, tgt, lengths, dec_state=None, fert_dict=None):
         """
         Args:
             src, tgt, lengths
@@ -425,14 +440,15 @@ class NMTModel(nn.Module):
         #print("src:", src)
         enc_hidden, context, fertility_vals = self.encoder(src, lengths)
         enc_state = self.init_decoder_state(context, enc_hidden)
-        out, dec_state, attns, _ = self.decoder(tgt, src, context,
+        out, dec_state, attns, upper_bounds = self.decoder(tgt, src, context,
                                              enc_state if dec_state is None
-                                             else dec_state, fertility_vals)
+                                             else dec_state, fertility_vals, 
+                                             fert_dict)
         if self.multigpu:
             # Not yet supported on multi-gpu
             dec_state = None
             attns = None
-        return out, attns, dec_state
+        return out, attns, dec_state, upper_bounds
 
 
 class DecoderState(object):

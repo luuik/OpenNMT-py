@@ -55,6 +55,8 @@ parser.add_argument('-n_best', type=int, default=1,
 
 parser.add_argument('-gpu', type=int, default=-1,
                     help="Device to run on")
+parser.add_argument('-guided_fertility', action="store_true",
+                    default=False, help="Guided fertility")
 
 def reportScore(name, scoreTotal, wordsTotal):
     print("%s AVG SCORE: %.4f, %s PPL: %.4f" % (

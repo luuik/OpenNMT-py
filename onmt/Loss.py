@@ -103,6 +103,7 @@ class MemoryEfficientLoss:
     def __init__(self, opt, generator, crit,
                  copy_loss=False,
                  coverage_loss=False,
+                 exhaustion_loss=False,
                  eval=False):
         """
         Args:
@@ -117,6 +118,10 @@ class MemoryEfficientLoss:
         self.copy_loss = copy_loss
         self.lambda_coverage = opt.lambda_coverage
         self.coverage_loss = coverage_loss
+        self.exhaustion_loss = exhaustion_loss
+        self.lambda_exhaust = opt.lambda_exhaust
+        self.mse = torch.nn.MSELoss()
+
     def score(self, loss_t, scores_t, targ_t):
         pred_t = scores_t.data.max(1)[1]
         non_padding = targ_t.ne(onmt.Constants.PAD).data
@@ -158,6 +163,8 @@ class MemoryEfficientLoss:
         if self.copy_loss:
             original["attn_t"] = attns["copy"]
             original["align_t"] = batch.alignment[1:]
+        if self.exhaustion_loss:
+            original["upper_bounds_t"] = attns["upper_bounds"]
 
         shards, dummies = shardVariables(original, self.max_batches, self.eval)
 
@@ -175,6 +182,10 @@ class MemoryEfficientLoss:
             if self.coverage_loss:
                 loss_t += self.lambda_coverage * torch.min(s["coverage_t"], s["attn_t"]).sum()
 
+            if self.exhaustion_loss:
+                #zero_mat = Variable(torch.Tensor([0]).repeat(upper_bounds.size(0), upper_bounds.size(1)).cuda())
+                #loss_t += self.lambda_exhaust * self.mse(upper_bounds, zero_mat).sum()
+                loss_t += self.lambda_exhaust * torch.pow(s["upper_bounds_t"], 2).sum()/(s["upper_bounds_t"].size(0)*s["upper_bounds_t"].size(1))
             stats.update(self.score(loss_t, scores_t, s["targ_t"]))
             if not self.eval:
                 loss_t.div(batch.batchSize).backward()

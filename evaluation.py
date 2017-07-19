@@ -12,6 +12,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import torch
+import pdb
 
 parser = argparse.ArgumentParser(description='evaluate.py')
 parser.add_argument('-ref_file', required=True,
@@ -62,7 +63,7 @@ def ter_score(ref_file, hyp_file):
 def plot_heatmap(att_weights, idx, srcSent, tgtSent):
 
     plt.figure(figsize=(8, 6), dpi=80)
-    att_weights = att_weights[0][0].cpu().numpy()
+    att_weights = np.transpose(att_weights[0][0].cpu().numpy())
     #print("Att_weights", att_weights)
     plt.imshow(att_weights, cmap='gray', interpolation='nearest')
     srcSent = [str(s) for s in srcSent]
@@ -70,10 +71,75 @@ def plot_heatmap(att_weights, idx, srcSent, tgtSent):
     
     plt.xticks(range(0, len(tgtSent)),tgtSent)
     plt.yticks(range(0, len(srcSent)),srcSent)
-    plt.savefig("softmax_att_matrix_"+str(idx), bbox_inches='tight')
+    plt.savefig("att_softmax_matrix"+str(idx)+".png", bbox_inches='tight')
+
     plt.close()
 
 
+def get_fertility(filename, trainData, src_vocab):
+
+    # list of lists for all sents in training set
+    fertility = []
+    with open(filename) as f:
+        for i, line in enumerate(f):
+            fertility_i = [1] * len(src_sents[i])
+            alignments = line.split(" ")
+            for al in alignments:
+                idxs = al.split("-")
+                a = int(idxs[0])
+                b = int(idxs[1])
+
+
+                fertility_i[a+1] += 1
+            #fertility_i = [elem for elem in fertility_i]
+            #fertility_i[0] = fertility_i[-1] = 1
+            fertility.append(fertility_i)
+
+    return fertility
+
+def get_fert_dict(align_filename, train_filename, src_vocab):
+    
+    fert_dict = {}
+    fertility = []
+
+    with open(train_filename) as f:
+      sents = f.readlines()
+      sents = [line.strip().split() for line in sents]
+      sents = [src_vocab.convertToIdx(line, '.') for line in sents]
+
+    for idx in src_vocab.labelToIdx.values():
+      fert_dict[idx] = 1.0
+
+    with open(align_filename) as f:
+      lines = f.readlines()
+      lines = [line.strip().split() for line in lines]
+      for i, line in enumerate(lines):
+        fertility_i = [1] * len(sents[i])
+        #print(fertility_i)
+        #print(line)
+        for elem in line:
+          idxs = elem.split("-")
+          a = int(idxs[0])
+          b = int(idxs[1])
+          fertility_i[a] += 1
+        for idx in sents[i]:
+          fert_dict[idx] = max(fert_dict[idx], fertility_i[a])
+    return fert_dict      
+
+def getBatchFertilities(fert_dict, batch):
+    """
+      fert_dict: vocabulary of words and their max fertilities
+      batch: src sentences of size(batch_size, src_len)
+      returns cudaTensor of size (batch_size, src_len)
+    """
+    batch_flat = batch.view(-1).data.tolist()
+    fertilities = []
+    for elem in batch_flat:
+        fertilities.append(fert_dict[elem])
+    fertilities_tensor = torch.FloatTensor(fertilities).view(batch.size(0), batch.size(1)).cuda()
+    return fertilities_tensor
+   
+     
 def main():
     opt = parser.parse_args()
     

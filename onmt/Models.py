@@ -362,7 +362,7 @@ class Decoder(nn.Module):
                 else:
                     upper_bounds -= attn
 
-                #print("upper bounds:", upper_bounds)
+                # print("upper bounds:", upper_bounds)
 
                 if self.context_gate is not None:
                     output = self.context_gate(

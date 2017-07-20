@@ -30,7 +30,8 @@ class Translator(object):
         
         self.predict_fertility = model_opt.predict_fertility \
             if "predict_fertility" in model_opt else False
-
+        
+        print(model_opt)
         if self._type == "text":
             encoder = onmt.Models.Encoder(model_opt, self.src_dict,
                                           self.src_feature_dicts)
@@ -47,9 +48,9 @@ class Translator(object):
         elif self.copy_attn:
             generator = onmt.modules.CopyGenerator(model_opt, self.src_dict,
                                                    self.tgt_dict)
-
-        if "guided_fertility" in model_opt: 
-            print('Getting fertilities from external alignments..')     
+        
+        if model_opt.guided_fertility!=None: 
+            print('Getting fertilities from external alignments..')
             self.fert_dict = evaluation.get_fert_dict(model_opt.guided_fertility, "../dynet-att/en-de/iwslt2014/prep/bpe.train.de-en.de", self.src_dict)
         else:
             self.fert_dict = None
@@ -141,10 +142,11 @@ class Translator(object):
         if batch.tgt is not None:
             decStates = encStates
             mask(padMask)
-            decOut, decStates, attn, _ = decoder(batch.tgt[:-1],
+            decOut, decStates, attn, upper_bounds = decoder(batch.tgt[:-1],
                                                  context, decStates, 
-                                                 fertility_vals, 
-                                                 fert_dict=self.fert_dict)
+                                                 fertility_vals,
+                                                 fert_dict=self.fert_dict,
+                                                 upper_bounds=upper_bounds)
 
             for dec_t, tgt_t in zip(decOut, batch.tgt[1:].data):
                 gen_t = self.model.generator.forward(dec_t)
@@ -178,8 +180,9 @@ class Translator(object):
             input = Variable(input, volatile=True)
             decOut, decStates, attn, upper_bounds = self.model.decoder(input, batch_src,
                                                          context, decStates,
-                                                         fertility_vals=fertility_vals, 
-                                                         fert_dict=self.fert_dict)
+                                                         fertility_vals=fertility_vals,
+                                                         fert_dict=self.fert_dict,
+                                                         upper_bounds=upper_bounds)
 
             decOut = decOut.squeeze(0)
             # decOut: (beam*batch) x numWords

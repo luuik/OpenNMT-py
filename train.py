@@ -61,11 +61,11 @@ parser.add_argument('-coverage_attn', action="store_true",
 
 parser.add_argument('-exhaustion_loss', action="store_true",
                     help='Train a loss to exhaust fertility')
+parser.add_argument('-lambda_exhaust', type=float, default=0.4,
+                    help='Lambda value for exhaustion.')
 parser.add_argument('-lambda_coverage', type=float, default=1,
                     help='Lambda value for coverage.')
 
-parser.add_argument('-lambda_exhaust', type=float, default=0.4,
-                    help='Lambda value for exhaustion.')
 parser.add_argument('-encoder_layer', type=str, default='rnn',
                     help="""Type of encoder layer to use.
                     Options: [rnn|mean|transformer]""")
@@ -211,7 +211,7 @@ def eval(model, criterion, data, fert_dict):
                                          eval=True, copy_loss=opt.copy_attn)
     for i in range(len(data)):
         batch = data[i]
-        outputs, attn, dec_hidden, _ = model(batch.src, batch.tgt, batch.lengths, fert_dict)
+        outputs, attn, dec_hidden, _ = model(batch.src, batch.tgt, batch.lengths, fert_dict=fert_dict)
         batch_stats, _, _ = loss.loss(batch, outputs, attn)
         stats.update(batch_stats)
     model.train()
@@ -439,11 +439,13 @@ def main():
         print(optim)
 
     optim.set_parameters(model.parameters())
+    
     if opt.guided_fertility: 
       print('Getting fertilities from external alignments..')     
       fert_dict = evaluation.get_fert_dict(opt.guided_fertility, "../dynet-att/en-de/iwslt2014/prep/bpe.train.de-en.de", dicts["src"])
     else:
       fert_dict = None
+
     if opt.train_from or opt.train_from_state_dict:
         optim.optimizer.load_state_dict(
             checkpoint['optim'].optimizer.state_dict())

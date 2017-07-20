@@ -41,6 +41,9 @@ parser.add_argument('-replace_unk', action="store_true",
 # parser.add_argument('-phrase_table',
 #                     help="""Path to source-target dictionary to replace UNK
 #                     tokens. See README.md for the format of this file.""")
+parser.add_argument('-guided_fertility', type=str, default=None,
+                    help="""Get fertility values from external aligner, specify alignment file""")
+
 parser.add_argument('-verbose', action="store_true",
                     help='Print scores and predictions for each sentence')
 parser.add_argument('-attn_debug', action="store_true",
@@ -55,8 +58,6 @@ parser.add_argument('-n_best', type=int, default=1,
 
 parser.add_argument('-gpu', type=int, default=-1,
                     help="Device to run on")
-parser.add_argument('-guided_fertility', action="store_true",
-                    default=False, help="Guided fertility")
 
 def reportScore(name, scoreTotal, wordsTotal):
     print("%s AVG SCORE: %.4f, %s PPL: %.4f" % (
@@ -110,7 +111,7 @@ def main():
         predBatch, predScore, goldScore, attn, src \
             = translator.translate(srcBatch, tgtBatch)
 
-        evaluation.plot_heatmap(attn, 0, srcBatch[0], predBatch[0][0])
+        #evaluation.plot_heatmap(attn, 0, srcBatch[0], predBatch[0][0])
 
         predScoreTotal += sum(score[0] for score in predScore)
         predWordsTotal += sum(len(x[0]) for x in predBatch)

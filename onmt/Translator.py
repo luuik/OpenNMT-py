@@ -48,6 +48,12 @@ class Translator(object):
             generator = onmt.modules.CopyGenerator(model_opt, self.src_dict,
                                                    self.tgt_dict)
 
+        if "guided_fertility" in model_opt: 
+            print('Getting fertilities from external alignments..')     
+            self.fert_dict = evaluation.get_fert_dict(model_opt.guided_fertility, "../dynet-att/en-de/iwslt2014/prep/bpe.train.de-en.de", self.src_dict)
+        else:
+            self.fert_dict = None
+
         model.load_state_dict(checkpoint['model'])
         generator.load_state_dict(checkpoint['generator'])
 
@@ -137,7 +143,8 @@ class Translator(object):
             mask(padMask)
             decOut, decStates, attn, _ = decoder(batch.tgt[:-1],
                                                  context, decStates, 
-                                                 fertility_vals)
+                                                 fertility_vals, 
+                                                 fert_dict=self.fert_dict)
 
             for dec_t, tgt_t in zip(decOut, batch.tgt[1:].data):
                 gen_t = self.model.generator.forward(dec_t)
@@ -171,7 +178,8 @@ class Translator(object):
             input = Variable(input, volatile=True)
             decOut, decStates, attn, upper_bounds = self.model.decoder(input, batch_src,
                                                          context, decStates,
-                                                         fertility_vals, upper_bounds)
+                                                         fertility_vals=fertility_vals, 
+                                                         fert_dict=self.fert_dict)
 
             decOut = decOut.squeeze(0)
             # decOut: (beam*batch) x numWords

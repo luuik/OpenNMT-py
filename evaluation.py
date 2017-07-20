@@ -126,7 +126,7 @@ def get_fert_dict(align_filename, train_filename, src_vocab):
           fert_dict[idx] = max(fert_dict[idx], fertility_i[a])
     return fert_dict      
 
-def getBatchFertilities(fert_dict, batch):
+def getBatchFertilities(fert_dict, batch, default_fert=1.0):
     """
       fert_dict: vocabulary of words and their max fertilities
       batch: src sentences of size(batch_size, src_len)
@@ -135,7 +135,10 @@ def getBatchFertilities(fert_dict, batch):
     batch_flat = batch.view(-1).data.tolist()
     fertilities = []
     for elem in batch_flat:
-        fertilities.append(fert_dict[elem])
+        if elem in fert_dict:
+            fertilities.append(fert_dict[elem])
+        else:
+            fertilities.append(default_fert)
     fertilities_tensor = torch.FloatTensor(fertilities).view(batch.size(0), batch.size(1)).cuda()
     return fertilities_tensor
    

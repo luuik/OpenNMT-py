@@ -331,7 +331,7 @@ def trainModel(model, trainData, validData, dataset, optim, fert_dict):
 def main():
     print("Loading data from '%s'" % opt.data)
 
-    dataset = torch.load(opt.data)
+    dataset = torch.load(opt.data, map_location=lambda storage, loc: storage)
     dict_checkpoint = (opt.train_from if opt.train_from
                        else opt.train_from_state_dict)
     if dict_checkpoint:
@@ -379,6 +379,8 @@ def main():
 
     decoder = onmt.Models.Decoder(opt, dicts['tgt'])
 
+    model = onmt.Models.NMTModel(encoder, decoder, len(opt.gpus) > 1)
+
     if opt.copy_attn:
         generator = onmt.modules.CopyGenerator(opt, dicts['src'], dicts['tgt'])
     else:
@@ -386,9 +388,7 @@ def main():
             nn.Linear(opt.rnn_size, dicts['tgt'].size()),
             nn.LogSoftmax())
         if opt.share_decoder_embeddings:
-            generator[0].weight = decoder.word_lut.weight
-
-    model = onmt.Models.NMTModel(encoder, decoder, len(opt.gpus) > 1)
+            generator[0].weight = decoder.embeddings.word_lut.weight
 
     if opt.train_from:
         print('Loading model from checkpoint at %s' % opt.train_from)

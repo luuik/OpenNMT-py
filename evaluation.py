@@ -19,6 +19,10 @@ parser.add_argument('-ref_file', required=True,
                 help='Path to reference file')
 parser.add_argument('-hyp_file', required=True,
                     help='Path to hypothesis file')
+parser.add_argument('-ref_align', required=True,
+                help='Path to reference alignments')
+parser.add_argument('-hyp_align', required=True,
+                    help='Path to hypothesis alignments')
 
 def bleu_score(ref_file, hyp_file):
     """Computes corpus level BLEU score with Moses' multi-bleu.pl script
@@ -60,18 +64,52 @@ def ter_score(ref_file, hyp_file):
 
     return sum(ter_list)/len(ter_list), av_ref_len, av_hyp_len
 
+def saer_score(ref_align, hyp_align):
+
+    with open(ref_align) as f:
+      references = f.readlines()
+      references = [ref.strip().split() for ref in references]
+
+    with open(hyp_align) as f:
+      hypothesis = f.readlines()
+      hypothesis = [hyp.strip().split() for hyp in hypothesis]
+
+    al_prec = 0.0
+    al_recall = 0.0
+    saer = 0.0
+    for al_ref, al_hyp in zip(references, hypothesis):
+      al_prec_i = 0
+      aer = 0.0
+      for al in al_hyp:
+        if al in al_ref:
+          al_prec_i += 1
+      al_count = al_prec_i
+      al_prec_i /= len(al_hyp)
+      al_rec_i = al_count / len(al_ref)
+      al_prec += al_prec_i
+      al_recall += al_rec_i
+      aer = 1 - (2 * al_count)/(len(al_ref) + len(al_hyp))
+      saer += aer
+    al_prec /= len(references)
+    al_recall /= len(references)
+    print("p: %f" % al_prec)
+    print("r: %f" % al_recall)
+
+    saer /= len(references)
+    return saer
+ 
 def plot_heatmap(att_weights, idx, srcSent, tgtSent):
 
-    plt.figure(figsize=(8, 6), dpi=80)
+    plt.figure(figsize=(20, 18), dpi=80)
     att_weights = np.transpose(att_weights[0][0].cpu().numpy())
-    #print("Att_weights", att_weights)
+    #print("Att_weights:", att_weights.shape)
+    #print("Sum-axis-0:", np.sum(att_weights,0))
     plt.imshow(att_weights, cmap='gray', interpolation='nearest')
     srcSent = [str(s) for s in srcSent]
     tgtSent = [str(s) for s in tgtSent]
-    
-    plt.xticks(range(0, len(tgtSent)),tgtSent)
+    plt.xticks(range(0, len(tgtSent)),tgtSent, rotation=45)
     plt.yticks(range(0, len(srcSent)),srcSent)
-    plt.savefig("att_softmax_matrix"+str(idx)+".png", bbox_inches='tight')
+    plt.savefig("att_fert_matrix_" + str(idx) + ".png", bbox_inches='tight')
 
     plt.close()
 
@@ -147,9 +185,11 @@ def main():
     opt = parser.parse_args()
     
     bleu, details = bleu_score(opt.ref_file, opt.hyp_file)
-    av_ter , av_ref_len, av_hyp_len = ter_score(opt.ref_file, opt.hyp_file)
     print("BLEU Score: %f , %s" % (float(bleu), details))
+    av_ter , av_ref_len, av_hyp_len = ter_score(opt.ref_file, opt.hyp_file)
     print("TER Score: %f" % av_ter)
+    saer = saer_score(opt.ref_align, opt.hyp_align)
+    print("SAER: %f" % saer)
     print("Average Reference Length: %f" % av_ref_len)
     print("Average Hypothesis Length: %f" % av_hyp_len) 
 

@@ -25,7 +25,7 @@ parser.add_argument('-tgt',
 parser.add_argument('-output', default='pred.txt',
                     help="""Path to output the predictions (each line will
                     be the decoded sequence""")
-parser.add_argument('-beam_size',  type=int, default=5,
+parser.add_argument('-beam_size',  type=int, default=15,
                     help='Beam size')
 parser.add_argument('-batch_size', type=int, default=1,
                     help='Batch size')
@@ -41,8 +41,8 @@ parser.add_argument('-replace_unk', action="store_true",
 # parser.add_argument('-phrase_table',
 #                     help="""Path to source-target dictionary to replace UNK
 #                     tokens. See README.md for the format of this file.""")
-parser.add_argument('-guided_fertility', type=str, default=None,
-                    help="""Get fertility values from external aligner, specify alignment file""")
+#parser.add_argument('-guided_fertility', type=str, default=None,
+#                    help="""Get fertility values from external aligner, specify alignment file""")
 
 parser.add_argument('-verbose', action="store_true",
                     help='Print scores and predictions for each sentence')
@@ -93,7 +93,7 @@ def main():
         import json
         translator.initBeamAccum()
 
-    for line in addone(codecs.open(opt.src, 'r', 'utf-8')):
+    for k, line in enumerate(addone(codecs.open(opt.src, 'r', 'utf-8'))):
         if line is not None:
             srcTokens = line.split()
             srcBatch += [srcTokens]
@@ -111,7 +111,7 @@ def main():
         predBatch, predScore, goldScore, attn, src \
             = translator.translate(srcBatch, tgtBatch)
 
-        #evaluation.plot_heatmap(attn, 0, srcBatch[0], predBatch[0][0])
+        #evaluation.plot_heatmap(attn, k, srcBatch[0], predBatch[0][0])
 
         predScoreTotal += sum(score[0] for score in predScore)
         predWordsTotal += sum(len(x[0]) for x in predBatch)

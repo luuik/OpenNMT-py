@@ -9,6 +9,7 @@ from onmt.modules.Gate import ContextGateFactory
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 import math
+import numpy as np
 import pdb
 import evaluation
 
@@ -125,12 +126,12 @@ class Encoder(nn.Module):
                  bidirectional=opt.brnn)
         
         self.predict_fertility = opt.predict_fertility
-       
+ 
         if self.predict_fertility:
           #self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions, 1)
-          self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions, self.hidden_size * self.num_directions)
+          self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions + input_size, self.hidden_size * self.num_directions)
           self.fertility_out = nn.Linear(self.hidden_size * self.num_directions, 1, bias=False)
-        
+
         self.guided_fertility = opt.guided_fertility
 
     def forward(self, input, lengths=None, hidden=None):
@@ -179,8 +180,9 @@ class Encoder(nn.Module):
             if lengths:
                 outputs = unpack(outputs)[0]
             if self.predict_fertility:
-              fertility_vals = F.tanh(self.fertility_linear(outputs.view(-1, self.hidden_size * self.num_directions)))
-              fertility_vals = F.softplus(self.fertility_out(fertility_vals))
+              fertility_vals = F.tanh(self.fertility_linear(torch.cat([outputs.view(-1, self.hidden_size * self.num_directions), emb.view(-1, vec_size)], dim=1)))
+              #fertility_vals = F.softplus(self.fertility_out(fertility_vals))
+              fertility_vals = torch.exp(self.fertility_out(fertility_vals))
               #fertility_vals = F.softplus(self.fertility_linear(outputs.view(-1, self.hidden_size * self.num_directions)))
               fertility_vals = fertility_vals.view(n_batch, s_len)
             #elif self.guided_fertility:
@@ -234,7 +236,6 @@ class Decoder(nn.Module):
                 )
 
         self.dropout = nn.Dropout(opt.dropout)
-
         # Std attention layer.
         self.attn = onmt.modules.GlobalAttention(
             opt.rnn_size,
@@ -347,22 +348,28 @@ class Decoder(nn.Module):
                     if self.predict_fertility:
                       #comp_tensor = torch.Tensor([1.1]).repeat(n_batch_, s_len_).cuda()
                       comp_tensor = torch.Tensor([float(emb.size(0)) / context.size(0)]).repeat(n_batch_, s_len_).cuda()
-
+                      #print("fertility_vals:", fertility_vals.data)
                       max_word_coverage = Variable(torch.max(fertility_vals.data, comp_tensor))
                     elif self.guided_fertility:
                       comp_tensor = torch.Tensor([float(emb.size(0)) / context.size(0)]).repeat(n_batch_, s_len_).cuda()
                       fertility_vals = evaluation.getBatchFertilities(fert_dict, src)
+                      #fertility_vals = F.tanh(Variable(fertility_vals)).data
+
+                      # Parameterise fertility by a Gaussian distribution
+                      #fertility_vals_probs = torch.normal(means=torch.mean(emb), std=torch.std(emb))
+
                       max_word_coverage = Variable(torch.max(fertility_vals, comp_tensor))
                       #print("max_word_coverage:", max_word_coverage)
                     else:
                       max_word_coverage = max(
                           self.fertility, float(emb.size(0)) / context.size(0))
+
                     upper_bounds = -attn + max_word_coverage
 
                 else:
                     upper_bounds -= attn
-
-                # print("upper bounds:", upper_bounds)
+                #print("attn:", attn)
+                #print("upper bounds:", upper_bounds)
 
                 if self.context_gate is not None:
                     output = self.context_gate(

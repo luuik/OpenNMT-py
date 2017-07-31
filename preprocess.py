@@ -6,6 +6,7 @@ import onmt.IO
 import argparse
 import torch
 import codecs
+import pdb
 
 parser = argparse.ArgumentParser(description='preprocess.py')
 onmt.Markdown.add_md_help_argument(parser)
@@ -31,6 +32,8 @@ parser.add_argument('-valid_tgt', required=True,
 
 parser.add_argument('-save_data', required=True,
                     help="Output file for the prepared data")
+parser.add_argument('-write_txt', action='store_true',
+                    help="Write training files in txt format")
 
 parser.add_argument('-src_vocab_size', type=int, default=50000,
                     help="Size of the source vocabulary")
@@ -262,6 +265,33 @@ def main():
         = makeData(opt.train_src, opt.train_tgt,
                    dicts['src'], dicts['tgt'],
                    dicts['src_features'], dicts['tgt_features'])
+
+
+    if opt.write_txt:
+
+        print('Writing stripped training set..')
+        sents = []
+        for sent_idx in train['src']:
+            sent_idx_list = sent_idx.tolist()
+            sent = []
+            for elem in sent_idx_list:
+                sent.append(dicts['src'].idxToLabel[elem])
+            sents.append(" ".join(sent)+"\n")
+
+        with open("stripped.bpe.train.de-en-l.tok.low.de",'w') as f:
+            f.writelines(sents)
+
+        sents = []
+        for sent_idx in train['tgt']:
+            sent_idx_list = sent_idx.tolist()
+            sent = []
+            for elem in sent_idx_list:
+                sent.append(dicts['tgt'].idxToLabel[elem])
+            sents.append(" ".join(sent)+"\n")
+
+        with open("stripped.bpe.train.de-en-l.tok.low.en",'w') as f:
+            f.writelines(sents)
+
     print('Preparing validation ...')
     valid = {}
     valid['src'], valid['tgt'], \

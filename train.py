@@ -61,7 +61,7 @@ parser.add_argument('-coverage_attn', action="store_true",
 
 parser.add_argument('-exhaustion_loss', action="store_true",
                     help='Train a loss to exhaust fertility')
-parser.add_argument('-lambda_exhaust', type=float, default=0.4,
+parser.add_argument('-lambda_exhaust', type=float, default=0.5,
                     help='Lambda value for exhaustion.')
 parser.add_argument('-lambda_coverage', type=float, default=1,
                     help='Lambda value for coverage.')
@@ -442,7 +442,7 @@ def main():
     
     if opt.guided_fertility: 
       print('Getting fertilities from external alignments..')     
-      fert_dict = evaluation.get_fert_dict(opt.guided_fertility, "../dynet-att/en-de/iwslt2014/prep/bpe.train.de-en.de", dicts["src"])
+      fert_dict = evaluation.get_fert_dict(opt.guided_fertility, "../data/de-en-large/stripped.bpe.train.de-en-l.tok.low.de", dicts["src"])
     else:
       fert_dict = None
 

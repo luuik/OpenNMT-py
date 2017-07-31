@@ -98,7 +98,7 @@ def saer_score(ref_align, hyp_align):
     saer /= len(references)
     return saer
  
-def plot_heatmap(att_weights, idx, srcSent, tgtSent):
+def plot_heatmap(model_name, att_weights, idx, srcSent, tgtSent):
 
     plt.figure(figsize=(20, 18), dpi=80)
     att_weights = np.transpose(att_weights[0][0].cpu().numpy())
@@ -109,7 +109,7 @@ def plot_heatmap(att_weights, idx, srcSent, tgtSent):
     tgtSent = [str(s) for s in tgtSent]
     plt.xticks(range(0, len(tgtSent)),tgtSent, rotation=45)
     plt.yticks(range(0, len(srcSent)),srcSent)
-    plt.savefig("att_fert_matrix_" + str(idx) + ".png", bbox_inches='tight')
+    plt.savefig("att_" + model_name + "_matrix_" + str(idx) + ".png", bbox_inches='tight')
 
     plt.close()
 

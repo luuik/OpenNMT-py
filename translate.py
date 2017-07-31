@@ -52,6 +52,9 @@ parser.add_argument('-attn_debug', action="store_true",
 parser.add_argument('-dump_beam', type=str, default="",
                     help='File to dump beam information to.')
 
+parser.add_argument('-heatmap', action="store_true",
+                    help='Store attention heatmaps.')
+
 parser.add_argument('-n_best', type=int, default=1,
                     help="""If verbose is set, will output the n_best
                     decoded sentences""")
@@ -110,8 +113,10 @@ def main():
 
         predBatch, predScore, goldScore, attn, src \
             = translator.translate(srcBatch, tgtBatch)
-
-        #evaluation.plot_heatmap(attn, k, srcBatch[0], predBatch[0][0])
+        
+        # Store attention heatmaps
+        if opt.heatmap:
+            evaluation.plot_heatmap(opt.model, attn, k, srcBatch[0], predBatch[0][0])
 
         predScoreTotal += sum(score[0] for score in predScore)
         predWordsTotal += sum(len(x[0]) for x in predBatch)

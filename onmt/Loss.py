@@ -185,7 +185,8 @@ class MemoryEfficientLoss:
             if self.exhaustion_loss:
                 #zero_mat = Variable(torch.Tensor([0]).repeat(upper_bounds.size(0), upper_bounds.size(1)).cuda())
                 #loss_t += self.lambda_exhaust * self.mse(upper_bounds, zero_mat).sum()
-                loss_t += self.lambda_exhaust * s["upper_bounds_t"].sum()/(s["upper_bounds_t"].size(0)*s["upper_bounds_t"].size(1))
+                #loss_t += self.lambda_exhaust * s["upper_bounds_t"].sum()/(s["upper_bounds_t"].size(0)*s["upper_bounds_t"].size(1))
+                loss_t += self.lambda_exhaust * s["upper_bounds_t"].sum()/s["upper_bounds_t"].size(1)
                 # loss_t += self.lambda_exhaust * -1 * torch.pow(attns, 2).sum()
             stats.update(self.score(loss_t, scores_t, s["targ_t"]))
             if not self.eval:

@@ -1,6 +1,7 @@
 import torch
 from torch.autograd import Function
 from torch.nn import Module
+from constrained_sparsemax import constrained_sparsemax
 import numpy as np
 
 def project_onto_simplex(a, radius=1.0):
@@ -160,4 +161,46 @@ class ConstrainedSoftmax(Module):
     def forward(self, input1, input2):
         return ConstrainedSoftmaxFunction()(input1, input2)
 
+class ConstrainedSparsemaxFunction(Function):
+    def forward(self, input1, input2):
+        z = input1.cpu().numpy()
+        u = input2.cpu().numpy()
+        probs = np.zeros_like(z)
+        regions = np.zeros_like(z)
+        for i in xrange(z.shape[0]):
+            probs[i,:], regions[i,:], _, _ = constrained_sparsemax(z[i], u[i])
+        probs = torch.from_numpy(probs)
+        regions = torch.from_numpy(regions)
+        if input1.is_cuda:
+            probs = probs.cuda()
+            regions = regions.cuda()
+        self.save_for_backward(probs)
+        self.saved_intermediate = regions, # Not sure this is safe.
+        return probs
+
+    def backward(self, grad_output):
+        output, = self.saved_tensors
+        regions, = self.saved_intermediate
+        probs = output
+        regions = regions.cpu().numpy() # TODO: do everything with tensors.
+        r0 = np.array(regions == 0, dtype=regions.dtype)
+        r1 = np.array(regions == 1, dtype=regions.dtype)
+        r2 = np.array(regions == 2, dtype=regions.dtype)
+        np_grad_output = grad_output.cpu().numpy()
+        #import pdb; pdb.set_trace()
+        avg = np.sum(np_grad_output * r1, 1) / np.sum(r1, 1)
+        np_grad_input1 = r1 * (np_grad_output - np.tile(avg[:,None],
+                                                        [1, r1.shape[1]]))
+        np_grad_input2 = r2 * (np_grad_output - np.tile(avg[:,None],
+                                                        [1, r2.shape[1]]))
+        grad_input1 = torch.from_numpy(np_grad_input1)
+        grad_input2 = torch.from_numpy(np_grad_input2)
+        if grad_output.is_cuda:
+           grad_input1  = grad_input1.cuda()
+           grad_input2  = grad_input2.cuda()
+        return grad_input1, grad_input2
+
+class ConstrainedSparsemax(Module):
+    def forward(self, input1, input2):
+        return ConstrainedSparsemaxFunction()(input1, input2)
 

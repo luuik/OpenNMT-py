@@ -69,15 +69,19 @@ if __name__ == "__main__":
     print
     print
 
-    sf = ConstrainedSoftmaxFunction()
+    #sf = ConstrainedSoftmaxFunction()
+    sf = ConstrainedSparsemaxFunction()
     z = Variable(torch.randn(batch_size, n).double().cuda(), requires_grad=True)
-    u = Variable(0.5 * torch.rand(batch_size, n).double().cuda(),
+    # This makes sure that each row of u has a sum larger than 1 (otherwise
+    # the problems are infeasible).
+    u = Variable(1./n + 1./n * torch.rand(batch_size, n).double().cuda(),
                  requires_grad=True)
     #z = Variable(torch.from_numpy(np.array([[1.,1.,1.,1.,1.,1.,1.,1.]])).cuda(),
     #             requires_grad=True)
     #u = Variable(torch.from_numpy(np.array([[.15,.167,1.,0.,1.,1.,0.,1.]])).cuda(),
     #             requires_grad=True)
-    p = ConstrainedSoftmax()(z, u)
+    #p = ConstrainedSoftmax()(z, u)
+    p = ConstrainedSparsemax()(z, u)
     print("p:", p)
     print("u:", u)
     print("u >= p", torch.le(p, u))

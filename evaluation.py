@@ -6,7 +6,7 @@ sys.setdefaultencoding("utf-8")
 
 import subprocess
 import argparse
-import pyter
+#import pyter
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -19,9 +19,9 @@ parser.add_argument('-ref_file', required=True,
                 help='Path to reference file')
 parser.add_argument('-hyp_file', required=True,
                     help='Path to hypothesis file')
-parser.add_argument('-ref_align', required=True,
+parser.add_argument('-ref_align', required=False,
                 help='Path to reference alignments')
-parser.add_argument('-hyp_align', required=True,
+parser.add_argument('-hyp_align', required=False,
                     help='Path to hypothesis alignments')
 
 def bleu_score(ref_file, hyp_file):
@@ -37,7 +37,7 @@ def bleu_score(ref_file, hyp_file):
     Raises:
         ValueError: Raises error if the perl script fails for some reason
     """
-    command = 'perl scripts/multi-bleu.pl ' + ref_file + ' < '+hyp_file
+    command = 'perl multi-bleu.pl ' + ref_file + ' < '+hyp_file
     c = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     details, error = c.communicate()
     if not details.startswith('BLEU ='):
@@ -188,8 +188,9 @@ def main():
     print("BLEU Score: %f , %s" % (float(bleu), details))
     av_ter , av_ref_len, av_hyp_len = ter_score(opt.ref_file, opt.hyp_file)
     print("TER Score: %f" % av_ter)
-    saer = saer_score(opt.ref_align, opt.hyp_align)
-    print("SAER: %f" % saer)
+    if opt.ref_align:
+      saer = saer_score(opt.ref_align, opt.hyp_align)
+      print("SAER: %f" % saer)
     print("Average Reference Length: %f" % av_ref_len)
     print("Average Hypothesis Length: %f" % av_hyp_len) 
 

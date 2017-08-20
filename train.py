@@ -98,7 +98,7 @@ parser.add_argument('-max_generator_batches', type=int, default=32,
                     help="""Maximum batches of words in a sequence to run
                     the generator on in parallel. Higher is faster, but uses
                     more memory.""")
-parser.add_argument('-epochs', type=int, default=13,
+parser.add_argument('-epochs', type=int, default=20,
                     help='Number of training epochs')
 parser.add_argument('-start_epoch', type=int, default=1,
                     help='The epoch from which to start')
@@ -337,7 +337,7 @@ def main():
                        else opt.train_from_state_dict)
     if dict_checkpoint:
         print('Loading dicts from checkpoint at %s' % dict_checkpoint)
-        checkpoint = torch.load(dict_checkpoint)
+        checkpoint = torch.load(dict_checkpoint, map_location=lambda storage, loc: storage)
         dataset['dicts'] = checkpoint['dicts']
 
     trainData = onmt.Dataset(dataset['train']['src'],

@@ -129,8 +129,9 @@ class Encoder(nn.Module):
  
         if self.predict_fertility:
           #self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions, 1)
-          self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions + input_size, self.hidden_size * self.num_directions)
-          self.fertility_out = nn.Linear(self.hidden_size * self.num_directions, 1, bias=False)
+          self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions + input_size, 2 * self.hidden_size * self.num_directions)
+          self.fertility_linear_2 = nn.Linear(2 * self.hidden_size * self.num_directions, 2 * self.hidden_size * self.num_directions)
+          self.fertility_out = nn.Linear(2 * self.hidden_size * self.num_directions, 1, bias=False)
 
         self.guided_fertility = opt.guided_fertility
 
@@ -180,10 +181,9 @@ class Encoder(nn.Module):
             if lengths:
                 outputs = unpack(outputs)[0]
             if self.predict_fertility:
-              fertility_vals = F.tanh(self.fertility_linear(torch.cat([outputs.view(-1, self.hidden_size * self.num_directions), emb.view(-1, vec_size)], dim=1)))
-              #fertility_vals = F.softplus(self.fertility_out(fertility_vals))
+              fertility_vals = F.relu(self.fertility_linear(torch.cat([outputs.view(-1, self.hidden_size * self.num_directions), emb.view(-1, vec_size)], dim=1)))
+              fertility_vals = F.relu(self.fertility_linear_2(fertility_vals))
               fertility_vals = torch.exp(self.fertility_out(fertility_vals))
-              #fertility_vals = F.softplus(self.fertility_linear(outputs.view(-1, self.hidden_size * self.num_directions)))
               fertility_vals = fertility_vals.view(n_batch, s_len)
             #elif self.guided_fertility:
             #  fertility_vals = evaluations.get_fertility()
@@ -332,7 +332,7 @@ class Decoder(nn.Module):
             # A workaround for now is to do one round of softmax (without
             # upper bound constraints) followed by several rounds of constrained
             # softmax.
-            #upper_bounds = Variable(torch.ones(attn.size()).cuda())
+            # upper_bounds = Variable(torch.ones(attn.size()).cuda())
             # Standard RNN decoder.
             for i, emb_t in enumerate(emb.split(1)):
                 emb_t = emb_t.squeeze(0)
@@ -353,13 +353,7 @@ class Decoder(nn.Module):
                     elif self.guided_fertility:
                       comp_tensor = torch.Tensor([float(emb.size(0)) / context.size(0)]).repeat(n_batch_, s_len_).cuda()
                       fertility_vals = evaluation.getBatchFertilities(fert_dict, src)
-                      #fertility_vals = F.tanh(Variable(fertility_vals)).data
-
-                      # Parameterise fertility by a Gaussian distribution
-                      #fertility_vals_probs = torch.normal(means=torch.mean(emb), std=torch.std(emb))
-
                       max_word_coverage = Variable(torch.max(fertility_vals, comp_tensor))
-                      #print("max_word_coverage:", max_word_coverage)
                     else:
                       max_word_coverage = max(
                           self.fertility, float(emb.size(0)) / context.size(0))

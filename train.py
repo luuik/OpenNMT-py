@@ -80,7 +80,8 @@ parser.add_argument('-attention_type', type=str, default='dotprod',
                     help="""The attention type to use:
                     dotprot (Luong) or MLP (Bahdanau)""")
 parser.add_argument('-attn_transform', type=str, default='softmax',
-                    choices=['softmax', 'constrained_softmax','sparsemax'],
+                    choices=['softmax', 'constrained_softmax','sparsemax',
+                             'constrained_sparsemax'],
                     help="""The attention transform to use""")
 parser.add_argument('-fertility', type=float, default=2.0,
                     help="""Constant fertility value for each word in the source""")

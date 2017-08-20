@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 from onmt.modules.Util import BottleLinear
 from onmt.modules import aeq
-from onmt.modules.activations import Softmax, Sparsemax, ConstrainedSoftmax
+from onmt.modules.activations import Softmax, Sparsemax, ConstrainedSoftmax, \
+    ConstrainedSparsemax
 import pdb
 
 class GlobalAttention(nn.Module):
@@ -58,6 +59,8 @@ class GlobalAttention(nn.Module):
             self.sm = Sparsemax()
         elif attn_transform == 'constrained_softmax':
             self.sm = ConstrainedSoftmax()
+        elif attn_transform == 'constrained_sparsemax':
+            self.sm = ConstrainedSparsemax()
         else:
             raise NotImplementedError
         self.attn_transform = attn_transform
@@ -122,6 +125,11 @@ class GlobalAttention(nn.Module):
         if self.attn_transform == 'constrained_softmax':
             if upper_bounds is None:
                 attn = nn.Softmax()(attn)
+            else:
+                attn = self.sm(attn, upper_bounds)
+        elif self.attn_transform == 'constrained_sparsemax':
+            if upper_bounds is None:
+                attn = Sparsemax()(attn)
             else:
                 attn = self.sm(attn, upper_bounds)
         else:

@@ -21,6 +21,10 @@ def double_constrained_sparsemax(z, l, u):
     This maps to Pardalos' canonical problem by making the transformations
     below.
     '''
+    dtype = z.dtype
+    z = z.astype('float64')
+    l = l.astype('float64')
+    u = u.astype('float64')
     a = .5 * (l - z)
     b = .5 * (u - z)
     c = np.ones_like(z)
@@ -35,13 +39,14 @@ def double_constrained_sparsemax(z, l, u):
     #print 2*x + z
     #p = 2*x + z
     #tau = -2*tau
+    p = p.astype(dtype)
     return p, regions, tau, .5*np.dot(p-z, p-z)
 
 def solve_quadratic_problem(a, b, c, d):
     '''Solve the problem:
 
     min_x sum_i c_i x_i^2
-    s.t. sum_i x_i = d
+    s.t. sum_i c_i x_i = d
          a_i <= x_i <= b_i, for all i.
 
     by using Pardalos' algorithm:
@@ -51,6 +56,22 @@ def solve_quadratic_problem(a, b, c, d):
     to upper and lower bounds." Mathematical Programming 46.1 (1990): 321-328.
     '''
     K = np.shape(c)[0]
+
+    # Check for tight constraints.
+    ind = np.nonzero(a == b)[0]
+    if len(ind):
+        x = np.zeros(K)
+        regions = np.zeros(K, dtype=int)
+        x[ind] = a[ind]
+        regions[ind] = 0 # By convention.
+        dd = d - c[ind].dot(x[ind])
+        ind = np.nonzero(a > b)[0]
+        if len(ind):
+            x[ind], tau, regions[ind] = \
+                solve_quadratic_problem(a[ind], b[ind], c[ind], dd)
+        else:
+            tau = 0. # By convention.
+        return x, tau, regions
 
     # Sort lower and upper bounds and keep the sorted indices.
     sorted_lower = np.argsort(a)

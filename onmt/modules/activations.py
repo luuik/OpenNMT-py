@@ -3,6 +3,7 @@ from torch.autograd import Function
 from torch.nn import Module
 from constrained_sparsemax import constrained_sparsemax
 import numpy as np
+import pdb
 
 def project_onto_simplex(a, radius=1.0):
     '''Project point a to the probability simplex.
@@ -169,6 +170,7 @@ class ConstrainedSparsemaxFunction(Function):
         regions = np.zeros_like(z)
         for i in xrange(z.shape[0]):
             probs[i,:], regions[i,:], _, _ = constrained_sparsemax(z[i], u[i])
+            assert np.all(probs[i, :] == probs[i, :]), pdb.set_trace()
         probs = torch.from_numpy(probs)
         regions = torch.from_numpy(regions)
         if input1.is_cuda:
@@ -193,6 +195,12 @@ class ConstrainedSparsemaxFunction(Function):
                                                         [1, r1.shape[1]]))
         np_grad_input2 = r2 * (np_grad_output - np.tile(avg[:,None],
                                                         [1, r2.shape[1]]))
+        ind = np.nonzero(np.sum(r1, 1) == 0)[0]
+        for i in ind:
+            np_grad_input1[i, :] = 0.
+            np_grad_input2[i, :] = 0.
+        assert np.all(np_grad_input1 == np_grad_input1), pdb.set_trace()
+        assert np.all(np_grad_input2 == np_grad_input2), pdb.set_trace()
         grad_input1 = torch.from_numpy(np_grad_input1)
         grad_input2 = torch.from_numpy(np_grad_input2)
         if grad_output.is_cuda:

@@ -25,20 +25,22 @@ def project_onto_simplex(a, radius=1.0):
     return x, tau, .5*np.dot(x-a, x-a)
 
 def constrained_softmax(z, u):
+    assert u.size(0) <= torch.sum(torch.sum(u, 1)).cpu().data.numpy()[0], "Invalid: sum(u) < 1"
     p = np.zeros_like(z)
     active = np.ones_like(z)
     nz = np.nonzero(u)[0]
     z = z[nz]
     u = u[nz]
     active[nz] = 0.
-    z -= np.mean(z)
+    z -= np.max(z)
     e_z = np.exp(z)
     Z = e_z.sum()
-    if Z==0: 
-      return p, active, s
+    # if Z==0: 
+    #   return p, active, s
     ind = np.argsort(-e_z / u)
     s = 0.
     for i in ind:
+        assert Z == 0.0, "Invalid: Z==0"
         val = e_z[i] * (1-s) / Z
         if val > u[i]:
             val = u[i]

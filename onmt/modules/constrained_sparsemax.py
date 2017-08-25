@@ -1,5 +1,8 @@
+import torch
+from torch.autograd import Variable
 import numpy as np
 import pdb
+# from activations import Softmax, Sparsemax
 
 def constrained_sparsemax(z, u):
     '''Solve the problem:
@@ -21,6 +24,8 @@ def double_constrained_sparsemax(z, l, u):
     This maps to Pardalos' canonical problem by making the transformations
     below.
     '''
+    assert u.shape[0] <= np.sum(u), "Invalid: sum(u) < 1"
+
     dtype = z.dtype
     z = z.astype('float64')
     l = l.astype('float64')
@@ -155,6 +160,7 @@ if __name__ == "__main__":
     print 'tau:', tau
     print 'value:', value
     tol = 1e-12
+    # print 'sparsemax p:', Sparsemax()(Variable(torch.Tensor(z).view(1,-1)))
     assert np.all(lower <= p) and np.all(p <= upper) \
         and 1-tol <= sum(p) <= 1+tol
 

@@ -128,7 +128,6 @@ class Encoder(nn.Module):
         self.predict_fertility = opt.predict_fertility
  
         if self.predict_fertility:
-          #self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions, 1)
           self.fertility_linear = nn.Linear(self.hidden_size * self.num_directions + input_size, 2 * self.hidden_size * self.num_directions)
           self.fertility_linear_2 = nn.Linear(2 * self.hidden_size * self.num_directions, 2 * self.hidden_size * self.num_directions)
           self.fertility_out = nn.Linear(2 * self.hidden_size * self.num_directions, 1, bias=False)
@@ -183,7 +182,7 @@ class Encoder(nn.Module):
             if self.predict_fertility:
               fertility_vals = F.relu(self.fertility_linear(torch.cat([outputs.view(-1, self.hidden_size * self.num_directions), emb.view(-1, vec_size)], dim=1)))
               fertility_vals = F.relu(self.fertility_linear_2(fertility_vals))
-              fertility_vals = torch.exp(self.fertility_out(fertility_vals))
+              fertility_vals = 1 + torch.exp(self.fertility_out(fertility_vals))
               fertility_vals = fertility_vals.view(n_batch, s_len)
             #elif self.guided_fertility:
             #  fertility_vals = evaluations.get_fertility()
@@ -273,8 +272,7 @@ class Decoder(nn.Module):
         s_len, n_batch_, _ = src.size()
         s_len_, n_batch__, _ = context.size()
         aeq(n_batch, n_batch_, n_batch__)
-        #print("s_len:", s_len)
-        #print("n_batch:", n_batch_)
+
         # aeq(s_len, s_len_)
         # END CHECKS
         if self.decoder_layer == "transformer":
@@ -357,13 +355,18 @@ class Decoder(nn.Module):
                     else:
                       max_word_coverage = max(
                           self.fertility, float(emb.size(0)) / context.size(0))
-
                     upper_bounds = -attn + max_word_coverage
-
                 else:
                     upper_bounds -= attn
                 #print("attn:", attn)
                 #print("upper bounds:", upper_bounds)
+
+                # Use <SINK> token for absorbing remaining attention weight
+                upper_bounds[:,-1] = 100*torch.ones(upper_bounds.size(0))
+ 
+                #if (upper_bounds.size(0) > torch.sum(torch.sum(upper_bounds, 1)).cpu().data.numpy())[0]:
+                #    print("inv sum:", torch.sum(upper_bounds, 1))
+                #    print("att:", attn)
 
                 if self.context_gate is not None:
                     output = self.context_gate(

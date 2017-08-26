@@ -202,14 +202,14 @@ class ConstrainedSparsemaxFunction(Function):
                                                         [1, r1.shape[1]]))
         np_grad_input2 = r2 * (np_grad_output - np.tile(avg[:,None],
                                                         [1, r2.shape[1]]))
-        print("grad_output:", np_grad_output)
-        print("grad1:", np_grad_input1)
-        print("grad2:", np_grad_input2)
-        pdb.set_trace()
         ind = np.nonzero(np.sum(r1, 1) == 0)[0]
         for i in ind:
             np_grad_input1[i, :] = 0.
             np_grad_input2[i, :] = 0.
+        print("grad_output:", np_grad_output)
+        print("grad1:", np_grad_input1)
+        print("grad2:", np_grad_input2)
+        pdb.set_trace()
         assert np.all(np_grad_input1 == np_grad_input1), pdb.set_trace()
         assert np.all(np_grad_input2 == np_grad_input2), pdb.set_trace()
         grad_input1 = torch.from_numpy(np_grad_input1)

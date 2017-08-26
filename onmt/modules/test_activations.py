@@ -81,6 +81,7 @@ if __name__ == "__main__":
     #u = Variable(torch.from_numpy(np.array([[.15,.167,1.,0.,1.,1.,0.,1.]])).cuda(),
     #             requires_grad=True)
     #p = ConstrainedSoftmax()(z, u)
+    import pdb; pdb.set_trace()
     p = ConstrainedSparsemax()(z, u)
     print("p:", p)
     print("u:", u)

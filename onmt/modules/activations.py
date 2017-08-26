@@ -4,6 +4,7 @@ from torch.nn import Module
 from constrained_sparsemax import constrained_sparsemax
 import numpy as np
 import pdb
+np.set_printoptions(threshold=np.nan)
 
 def project_onto_simplex(a, radius=1.0):
     '''Project point a to the probability simplex.
@@ -170,6 +171,8 @@ class ConstrainedSparsemaxFunction(Function):
     def forward(self, input1, input2):
         z = input1.cpu().numpy()
         u = input2.cpu().numpy()
+        print("z:", z)
+        print("u:", u)
         probs = np.zeros_like(z)
         regions = np.zeros_like(z)
         for i in xrange(z.shape[0]):
@@ -199,6 +202,10 @@ class ConstrainedSparsemaxFunction(Function):
                                                         [1, r1.shape[1]]))
         np_grad_input2 = r2 * (np_grad_output - np.tile(avg[:,None],
                                                         [1, r2.shape[1]]))
+        print("grad_output:", np_grad_output)
+        print("grad1:", np_grad_input1)
+        print("grad2:", np_grad_input2)
+        pdb.set_trace()
         ind = np.nonzero(np.sum(r1, 1) == 0)[0]
         for i in ind:
             np_grad_input1[i, :] = 0.

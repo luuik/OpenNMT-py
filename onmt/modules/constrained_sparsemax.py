@@ -24,8 +24,8 @@ def double_constrained_sparsemax(z, l, u):
     This maps to Pardalos' canonical problem by making the transformations
     below.
     '''
-    assert u.shape[0] <= np.sum(u), "Invalid: sum(u) < 1"
-
+    assert round(np.sum(u), 3) >= 1.0 , "Invalid : sum(u) < 1.0"
+    #assert round(np.sum(u), 3) >= 1.0 , pdb.set_trace()
     dtype = z.dtype
     z = z.astype('float64')
     l = l.astype('float64')

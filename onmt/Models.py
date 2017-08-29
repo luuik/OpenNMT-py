@@ -316,6 +316,8 @@ class Decoder(nn.Module):
         if self._coverage:
             attns["coverage"] = []
 
+        hidden_states = []
+
         if self.decoder_type == "transformer":
             # Tranformer Decoder.
             assert isinstance(state, TransformerDecoderState)
@@ -365,6 +367,7 @@ class Decoder(nn.Module):
                     output = self.dropout(attn_output)
                 outputs += [output]
                 attns["std"] += [attn]
+                hidden_states += [hidden]
 
                 # COVERAGE
                 if self._coverage:
@@ -383,6 +386,7 @@ class Decoder(nn.Module):
             outputs = torch.stack(outputs)
             for k in attns:
                 attns[k] = torch.stack(attns[k])
+            hidden_states = torch.stack(hidden_states)
         else:
             assert isinstance(state, RNNDecoderState)
             assert emb.dim() == 3
@@ -420,7 +424,7 @@ class Decoder(nn.Module):
             state = RNNDecoderState(hidden, outputs[-1].unsqueeze(0), None)
             attns["std"] = attn_scores
 
-        return outputs, state, attns
+        return outputs, state, attns, hidden_states
 
 class TM-NMTModel(nn.Module):
     def __init__(self, nmt_model, opt, multigpu=False):

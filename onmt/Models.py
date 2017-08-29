@@ -422,6 +422,34 @@ class Decoder(nn.Module):
 
         return outputs, state, attns
 
+class TM-NMTModel(nn.Module):
+    def __init__(self, nmt_model, opt, multigpu=False):
+        self.multigpu = multigpu
+        super(TM-NMTModel, self).__init__()
+        self.nmt_model = nmt_model
+        # TODO: initialize attention tensor, gating parameter, coverage_parameter
+
+        # celltype
+        if opt.rnn_type == "LSTM":
+            stackedCell = onmt.modules.StackedLSTM
+        else:
+            stackedCell = onmt.modules.StackedGRU
+
+        # Std attention layer.
+        self.attn = onmt.modules.GlobalAttention(
+            opt.rnn_size,
+            coverage=None, # for now (TODO)
+            attn_type=opt.attention_type,
+            attn_transform=opt.attn_transform
+        )
+        # gating is a FF network
+        self.gating = stackedCell(opt.layers, input_size,
+                                  opt.rnn_size, opt.dropout)
+        # TODO: initialise with random value
+        self.coverage_param = 0
+
+        # TODO: initialise the key-value memory
+        self.key-value_memory = None
 
 class NMTModel(nn.Module):
     def __init__(self, encoder, decoder, multigpu=False):

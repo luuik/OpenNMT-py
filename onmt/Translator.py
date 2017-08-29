@@ -83,7 +83,7 @@ class Translator(object):
         if "tgt" in batch.__dict__:
             decStates = encStates
             mask(padMask.unsqueeze(0))
-            decOut, decStates, attn = self.model.decoder(batch.tgt[:-1],
+            decOut, decStates, attn, _ = self.model.decoder(batch.tgt[:-1],
                                                          batch.src,
                                                          context,
                                                          decStates)
@@ -119,7 +119,7 @@ class Translator(object):
                          .t().contiguous().view(1, -1)
             input.masked_fill_(input.gt(len(self.fields["tgt"].vocab)-1), 0)
             input = Variable(input, volatile=True)
-            decOut, decStates, attn = self.model.decoder(input, batch_src,
+            decOut, decStates, attn, _ = self.model.decoder(input, batch_src,
                                                          context, decStates)
             # print(decStates.all[0][:, 0, 0])
             decOut = decOut.squeeze(0)

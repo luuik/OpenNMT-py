@@ -316,6 +316,8 @@ class Decoder(nn.Module):
         if self._coverage:
             attns["coverage"] = []
 
+        hidden_states = []
+
         if self.decoder_type == "transformer":
             # Tranformer Decoder.
             assert isinstance(state, TransformerDecoderState)
@@ -365,6 +367,7 @@ class Decoder(nn.Module):
                     output = self.dropout(attn_output)
                 outputs += [output]
                 attns["std"] += [attn]
+                hidden_states += [hidden]
 
                 # COVERAGE
                 if self._coverage:
@@ -383,6 +386,7 @@ class Decoder(nn.Module):
             outputs = torch.stack(outputs)
             for k in attns:
                 attns[k] = torch.stack(attns[k])
+            hidden_states = torch.stack(hidden_states)
         else:
             assert isinstance(state, RNNDecoderState)
             assert emb.dim() == 3
@@ -420,12 +424,12 @@ class Decoder(nn.Module):
             state = RNNDecoderState(hidden, outputs[-1].unsqueeze(0), None)
             attns["std"] = attn_scores
 
-        return outputs, state, attns
+        return outputs, state, attns, hidden_states
 
-class TM-NMTModel(nn.Module):
+class TM_NMTModel(nn.Module):
     def __init__(self, nmt_model, opt, multigpu=False):
         self.multigpu = multigpu
-        super(TM-NMTModel, self).__init__()
+        super(TM_NMTModel, self).__init__()
         self.nmt_model = nmt_model
         # TODO: initialize attention tensor, gating parameter, coverage_parameter
 
@@ -449,7 +453,7 @@ class TM-NMTModel(nn.Module):
         self.coverage_param = 0
 
         # TODO: initialise the key-value memory
-        self.key-value_memory = None
+        self.key_value_memory = None
 
 class NMTModel(nn.Module):
     def __init__(self, encoder, decoder, multigpu=False):
@@ -494,7 +498,7 @@ class NMTModel(nn.Module):
         tgt = tgt[:-1]  # exclude last target from inputs
         enc_hidden, context = self.encoder(src, lengths)
         enc_state = self.init_decoder_state(context, enc_hidden)
-        out, dec_state, attns = self.decoder(tgt, src, context,
+        out, dec_state, attns, hidden_states = self.decoder(tgt, src, context,
                                              enc_state if dec_state is None
                                              else dec_state)
         if self.multigpu:

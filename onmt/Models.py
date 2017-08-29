@@ -367,7 +367,7 @@ class Decoder(nn.Module):
                     output = self.dropout(attn_output)
                 outputs += [output]
                 attns["std"] += [attn]
-                hidden_states += [hidden]
+                hidden_states += [hidden[1][0]]
 
                 # COVERAGE
                 if self._coverage:

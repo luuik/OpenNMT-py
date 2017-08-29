@@ -106,11 +106,11 @@ def main():
         model = nn.DataParallel(model, device_ids=opt.gpuid, dim=1)
     #     generator = nn.DataParallel(generator, device_ids=opt.gpuid, dim=0)
 
-    TMNMTModel = onmt.Models.TMNMTModel(BaseNMTModel, opt, len(opt.gpuid) > 1)
+    TM_NMTModel = onmt.Models.TM_NMTModel(BaseNMTModel, opt, len(opt.gpuid) > 1)
 
     if opt.param_init != 0.0:
         print('Intializing params')
-        for p in TMNMTModel.parameters():
+        for p in TM_NMTModel.parameters():
             p.data.uniform_(-opt.param_init, opt.param_init)
             
     optim = onmt.Optim(
@@ -119,7 +119,7 @@ def main():
         start_decay_at=opt.start_decay_at,
         opt=opt
     )
-    optim.set_parameters(TMNMTModel.parameters())
+    optim.set_parameters(TM_NMTModel.parameters())
 
     # TODO: count and display number of parameters
     

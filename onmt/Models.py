@@ -442,18 +442,21 @@ class TM_NMTModel(nn.Module):
         # Std attention layer.
         self.attn = onmt.modules.GlobalAttention(
             opt.rnn_size,
-            coverage=None, # for now (TODO)
-            attn_type=opt.attention_type,
-            attn_transform=opt.attn_transform
-        )
+            coverage=opt.coverage_attn,
+            attn_type=opt.global_attention)
+
         # gating is a FF network
+        input_size = opt.tgt_word_vec_size
+        if opt.input_feed:
+            input_size += opt.rnn_size
+
         self.gating = stackedCell(opt.layers, input_size,
                                   opt.rnn_size, opt.dropout)
         # TODO: initialise with random value
         self.coverage_param = 0
 
         # TODO: initialise the key-value memory
-        self.key_value_memory = None
+        self.keyvalue_memory = None
 
 class NMTModel(nn.Module):
     def __init__(self, encoder, decoder, multigpu=False):

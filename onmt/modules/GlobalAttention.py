@@ -63,6 +63,7 @@ class GlobalAttention(nn.Module):
         if coverage:
             self.linear_cover = nn.Linear(1, dim, bias=False)
 
+
     def applyMask(self, mask):
         self.mask = mask
 
@@ -104,7 +105,7 @@ class GlobalAttention(nn.Module):
 
             return self.v(wquh.view(-1, dim)).view(tgt_batch, tgt_len, src_len)
 
-    def forward(self, input, context, coverage=None):
+    def forward(self, input, context, coverage=None, values=None, penalty=None):
         """
         input (FloatTensor): batch x tgt_len x dim: decoder's rnn's output.
         context (FloatTensor): batch x src_len x dim: src hidden states
@@ -146,12 +147,18 @@ class GlobalAttention(nn.Module):
             align.data.masked_fill_(mask_, -float('inf'))
 
         # Softmax to normalize attention weights
-        align_vectors = self.sm(align.view(batch*targetL, sourceL))
+        if penalty is not None:
+            align_vectors = self.sm((align - penalty).view(batch * targetL, sourceL))
+        else:
+            align_vectors = self.sm(align.view(batch * targetL, sourceL))
         align_vectors = align_vectors.view(batch, targetL, sourceL)
 
         # each context vector c_t is the weighted average
         # over all the source hidden states
-        c = torch.bmm(align_vectors, context)
+        if self.values is not None:
+            c = torch.bmm(align_vectors, values)
+        else:
+            c = torch.bmm(align_vectors, context)
 
         # concatenate
         concat_c = torch.cat([c, input], 2).view(batch*targetL, dim*2)

@@ -88,3 +88,21 @@ class BothContextGate(nn.Module):
     def forward(self, prev_emb, dec_state, attn_state):
         z, source, target = self.context_gate(prev_emb, dec_state, attn_state)
         return self.tanh((1. - z) * target + z * source)
+
+
+
+#------------- Lena begin -----------------
+
+class Gate(nn.Module):
+"""Simple gate"""
+
+    def __init__(self, input_size, output_size):
+        super(Gate, self).__init__()
+        self.gate = nn.Linear(input_size, output_size, bias=True)
+        self.sig = nn.Sigmoid()
+
+    def forward(self, input_tensor):
+        z = self.sig(self.gate(input_tensor))
+        return z
+
+#------------- Lena end -------------------

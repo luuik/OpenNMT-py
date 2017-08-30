@@ -83,7 +83,7 @@ def main():
         print('Loading dicts from checkpoint at %s' % dict_checkpoint)
         checkpoint = torch.load(dict_checkpoint,
                                 map_location=lambda storage, loc: storage)
-        #fields = onmt.IO.load_fields(checkpoint['vocab'])
+        #fields = onmt.IO.ONMTDataset.load_fields(checkpoint['vocab'])
 
     print(' * vocabulary size. source = %d; target = %d' %
           (len(fields['src'].vocab), len(fields['tgt'].vocab)))

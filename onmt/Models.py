@@ -427,36 +427,38 @@ class Decoder(nn.Module):
         return outputs, state, attns, hidden_states
 
 class TM_NMTModel(nn.Module):
-    def __init__(self, nmt_model, opt, multigpu=False):
+    def __init__(self, nmt_model, opt, fields, multigpu=False):
         self.multigpu = multigpu
         super(TM_NMTModel, self).__init__()
         self.nmt_model = nmt_model
         # TODO: initialize attention tensor, gating parameter, coverage_parameter
-
-        # celltype
-        if opt.rnn_type == "LSTM":
-            stackedCell = onmt.modules.StackedLSTM
-        else:
-            stackedCell = onmt.modules.StackedGRU
-
         # Std attention layer.
         self.attn = onmt.modules.GlobalAttention(
             opt.rnn_size,
             coverage=opt.coverage_attn,
             attn_type=opt.global_attention)
 
-        # gating is a FF network
-        input_size = opt.tgt_word_vec_size
-        if opt.input_feed:
-            input_size += opt.rnn_size
+        # gating
+        # TODO: set gating FF nn's dimensions
+        gating_D_in = 10
+        gating_H = 10
+        gating_D_out = 10
+        self.gating = nn.Sequential(
+          torch.nn.Linear(gating_D_in, gating_H),
+          torch.nn.Tanh(),
+          torch.nn.Linear(gating_H, gating_D_out)
+        )
 
-        self.gating = stackedCell(opt.layers, input_size,
-                                  opt.rnn_size, opt.dropout)
         # TODO: initialise with random value
         self.coverage_param = 0
 
         # TODO: initialise the key-value memory
         self.keyvalue_memory = None
+
+        # generator
+        self.generator = nn.Sequential(
+            nn.Linear(opt.rnn_size, len(fields["tgt"].vocab)),
+            nn.LogSoftmax())
 
 class NMTModel(nn.Module):
     def __init__(self, encoder, decoder, multigpu=False):
@@ -508,7 +510,7 @@ class NMTModel(nn.Module):
             # Not yet supported on multi-gpu
             dec_state = None
             attns = None
-        return out, attns, dec_state
+        return out, attns, dec_state, hidden_states
 
 
 class DecoderState(object):

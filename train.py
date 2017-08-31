@@ -126,14 +126,16 @@ def trainModel(model, trainData, validData, fields, optim):
 
                 # Main training loop
                 model.zero_grad()
-                outputs, attn, dec_state = \
+                outputs, attn, dec_state, hidden_states = \
                     model(src, tgt, src_lengths, dec_state)
 
                 # (2) F-prop/B-prob generator in shards for memory
                 # efficiency.
                 batch_stats = onmt.Loss.Statistics()
+                # print outputs, batch, attn
                 gen_state = closs.makeLossBatch(outputs, batch, attn,
                                                 tgt_r)
+                print gen_state
                 for shard in splitter.splitIter(gen_state):
 
                     # Compute loss and backprop shard.
@@ -231,7 +233,7 @@ def main():
         print('Loading dicts from checkpoint at %s' % dict_checkpoint)
         checkpoint = torch.load(dict_checkpoint,
                                 map_location=lambda storage, loc: storage)
-        fields = onmt.IO.load_fields(checkpoint['vocab'])
+        fields = onmt.IO.ONMTDataset.load_fields(checkpoint['vocab'])
 
     print(' * vocabulary size. source = %d; target = %d' %
           (len(fields['src'].vocab), len(fields['tgt'].vocab)))

@@ -155,7 +155,7 @@ class GlobalAttention(nn.Module):
 
         # each context vector c_t is the weighted average
         # over all the source hidden states
-        if self.values is not None:
+        if values is not None:
             c = torch.bmm(align_vectors, values)
         else:
             c = torch.bmm(align_vectors, context)

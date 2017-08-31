@@ -55,6 +55,157 @@ if opt.exp_host != "":
         cc.remove_experiment(opt.exp)
     experiment = cc.create_experiment(opt.exp)
 
+
+def eval(model, criterion, data, fields):
+    validData = onmt.IO.OrderedIterator(
+        dataset=data, device=opt.gpuid[0] if opt.gpuid else -1,
+        batch_size=opt.batch_size, train=False, sort=True)
+
+    stats = onmt.Loss.Statistics()
+    model.eval()
+    loss = onmt.Loss.LossCompute(model.generator, criterion,
+                                 fields["tgt"].vocab, data, 0, opt)
+    for batch in validData:
+        _, src_lengths = batch.src
+        src = onmt.IO.make_features(batch, fields)
+        outputs, attn, _ = model(src, batch.tgt, src_lengths)
+        gen_state = loss.makeLossBatch(outputs, batch, attn,
+                                       (0, batch.tgt.size(0)))
+        _, batch_stats = loss.computeLoss(batch=batch, **gen_state)
+        stats.update(batch_stats)
+    model.train()
+    return stats
+
+
+def trainModel(model, trainData, validData, fields, optim):
+    model.train()
+
+    pad_id = fields['tgt'].vocab.stoi[onmt.IO.PAD_WORD]
+
+    # Define criterion of each GPU.
+    if not opt.copy_attn:
+        criterion = onmt.Loss.NMTCriterion(len(fields['tgt'].vocab), opt,
+                                           pad_id)
+    else:
+        criterion = onmt.modules.CopyCriterion(len(fields['tgt'].vocab),
+                                               opt.copy_attn_force, pad_id)
+
+    splitter = onmt.Loss.Splitter(opt.max_generator_batches)
+
+    train = onmt.IO.OrderedIterator(
+        dataset=trainData, batch_size=opt.batch_size,
+        device=opt.gpuid[0] if opt.gpuid else -1,
+        repeat=False)
+
+    def trainEpoch(epoch):
+        closs = onmt.Loss.LossCompute(model.generator, criterion,
+                                      fields["tgt"].vocab, trainData,
+                                      epoch, opt)
+
+        total_stats = onmt.Loss.Statistics()
+        report_stats = onmt.Loss.Statistics()
+
+        for i, batch in enumerate(train):
+            target_size = batch.tgt.size(0)
+
+            dec_state = None
+            _, src_lengths = batch.src
+            src = onmt.IO.make_features(batch, fields)
+            report_stats.n_src_words += src_lengths.sum()
+
+            # Truncated BPTT
+            trunc_size = opt.truncated_decoder if opt.truncated_decoder \
+                else target_size
+
+            for j in range(0, target_size-1, trunc_size):
+                # (1) Create truncated target.
+                tgt_r = (j, j + trunc_size)
+                tgt = batch.tgt[tgt_r[0]: tgt_r[1]]
+
+                # (2) F-prop all but generator.
+
+                # Main training loop
+                model.zero_grad()
+                outputs, attn, dec_state = \
+                    model(src, tgt, [src, src], [tgt, tgt], src_lengths, dec_state)
+
+                # (2) F-prop/B-prob generator in shards for memory
+                # efficiency.
+                batch_stats = onmt.Loss.Statistics()
+                # print 'Train outputs size', outputs.size()
+                # print 'Train attns size', attn["std"].size()
+                gen_state = closs.makeLossBatch(outputs, batch, attn,
+                                                tgt_r)
+                for shard in splitter.splitIter(gen_state):
+
+                    # Compute loss and backprop shard.
+                    # print shard
+                    loss, stats = closs.computeLoss(batch=batch,
+                                                    **shard)
+                    loss.div(batch.batch_size).backward()
+                    batch_stats.update(stats)
+
+                # (3) Update the parameters and statistics.
+                optim.step()
+                total_stats.update(batch_stats)
+                report_stats.update(batch_stats)
+
+                # If truncated, don't backprop fully.
+                if dec_state is not None:
+                    dec_state.detach()
+
+            if i % opt.report_every == -1 % opt.report_every:
+                report_stats.output(epoch, i+1, len(train),
+                                    total_stats.start_time)
+                if opt.exp_host:
+                    report_stats.log("progress", experiment, optim)
+                report_stats = onmt.Loss.Statistics()
+        return total_stats
+
+    for epoch in range(opt.start_epoch, opt.epochs + 1):
+        print('')
+
+        #  (1) train for one epoch on the training set
+        train_stats = trainEpoch(epoch)
+        print('Train perplexity: %g' % train_stats.ppl())
+        print('Train accuracy: %g' % train_stats.accuracy())
+
+        #  (2) evaluate on the validation set
+        valid_stats = eval(model, criterion, validData, fields)
+        print('Validation perplexity: %g' % valid_stats.ppl())
+        print('Validation accuracy: %g' % valid_stats.accuracy())
+
+        # Log to remote server.
+        if opt.exp_host:
+            train_stats.log("train", experiment, optim)
+            valid_stats.log("valid", experiment, optim)
+
+        #  (3) update the learning rate
+        optim.updateLearningRate(valid_stats.ppl(), epoch)
+
+        model_state_dict = (model.module.state_dict() if len(opt.gpuid) > 1
+                            else model.state_dict())
+        model_state_dict = {k: v for k, v in model_state_dict.items()
+                            if 'generator' not in k}
+        generator_state_dict = (model.generator.module.state_dict()
+                                if len(opt.gpuid) > 1
+                                else model.generator.state_dict())
+        #  (4) drop a checkpoint
+        if epoch >= opt.start_checkpoint_at:
+            checkpoint = {
+                'model': model_state_dict,
+                'generator': generator_state_dict,
+                'vocab': onmt.IO.ONMTDataset.save_vocab(fields),
+                'opt': opt,
+                'epoch': epoch,
+                'optim': optim
+            }
+            torch.save(checkpoint,
+                       '%s_acc_%.2f_ppl_%.2f_e%d.pt'
+                       % (opt.save_model, valid_stats.accuracy(),
+                          valid_stats.ppl(), epoch))
+
+
 def check_model_path():
     save_model_path = os.path.abspath(opt.save_model)
     model_dirname = os.path.dirname(save_model_path)
@@ -83,7 +234,7 @@ def main():
         print('Loading dicts from checkpoint at %s' % dict_checkpoint)
         checkpoint = torch.load(dict_checkpoint,
                                 map_location=lambda storage, loc: storage)
-        #fields = onmt.IO.ONMTDataset.load_fields(checkpoint['vocab'])
+        fields = onmt.IO.ONMTDataset.load_fields(checkpoint['vocab'])
 
     print(' * vocabulary size. source = %d; target = %d' %
           (len(fields['src'].vocab), len(fields['tgt'].vocab)))
@@ -106,7 +257,7 @@ def main():
         model = nn.DataParallel(model, device_ids=opt.gpuid, dim=1)
     #     generator = nn.DataParallel(generator, device_ids=opt.gpuid, dim=0)
 
-    TM_NMTModel = onmt.Models.TM_NMTModel(BaseNMTModel, opt, len(opt.gpuid) > 1)
+    TM_NMTModel = onmt.Models.TM_NMTModel(BaseNMTModel, opt, fields, multigpu=len(opt.gpuid) > 1)
 
     if opt.param_init != 0.0:
         print('Intializing params')
@@ -119,13 +270,15 @@ def main():
         start_decay_at=opt.start_decay_at,
         opt=opt
     )
-    optim.set_parameters(TM_NMTModel.parameters())
+    optim.set_parameters([ param for param in TM_NMTModel.parameters() if param.requires_grad])
 
     # TODO: count and display number of parameters
     
     check_model_path()
 
     # TODO: train TM-NMTModel
+    trainModel(TM_NMTModel, train, valid, fields, optim)
+
 
 
 if __name__ == "__main__":

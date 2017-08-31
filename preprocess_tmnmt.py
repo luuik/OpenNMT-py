@@ -55,7 +55,21 @@ torch.manual_seed(opt.seed)
 def main():
     fields = onmt.IO.TMNMTDataset.get_fields(opt.nb_tms)
     print("Building Training...")
-    train = onmt.IO.ONMTDataset(opt.train_src, opt.train_tgt, fields, opt)
+    train = onmt.IO.TMNMTDataset(opt.train_src, opt.train_tgt, opt.train_tm, fields, opt)
+    print("Building Vocab...")
+    onmt.IO.TMNMTDataset.build_vocab(train, opt)
+    print("Building Valid...")
+    valid_fields = onmt.IO.ONMTDataset.get_fields(0)
+    valid = onmt.IO.ONMTDataset(opt.valid_src, opt.valid_tgt, valid_fields, opt)
+    print("Saving train/valid/fields")
+
+    # Can't save fields, so remove/reconstruct at training time.
+    torch.save(onmt.IO.TMNMTDataset.save_vocab(fields),
+               open(opt.save_data + '.vocab.pt', 'wb'))
+    train.fields = []
+    valid.fields = []
+    torch.save(train, open(opt.save_data + '.train.pt', 'wb'))
+    torch.save(valid, open(opt.save_data + '.valid.pt', 'wb'))
 
 if __name__ == "__main__":
     main()

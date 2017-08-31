@@ -304,6 +304,21 @@ class ONMTDataset(torchtext.data.Dataset):
             fields["src"].vocab = merged_vocab
             fields["tgt"].vocab = merged_vocab
 
+    
+class TMExample(torchtext.data.Example):
+    @classmethod
+    def fromlist(cls, data, fields, ntms):
+        ex = cls()
+        for (name, field), val in zip(fields, data):
+            if field is not None:
+                if name == "tm_src" or name == "tm_tgt":
+                    listval = []
+                    for k in range(0, ntms):
+                        listval.append(field[k].preprocess(val[k]))
+                    setattr(ex, name, listval)
+                else:
+                    setattr(ex, name, field.preprocess(val))
+        return ex
 
 class TMNMTDataset(ONMTDataset):
     def __init__(self, src_path, tgt_path, src_tgt_tm_path, fields, opt,
@@ -311,12 +326,14 @@ class TMNMTDataset(ONMTDataset):
         examples = []
         src_words = []
         self.src_vocabs = []
+        self.nfeatures = 0
         
         with codecs.open(src_path, "r", "utf-8") as src_file:
             for i, src_line in enumerate(src_file):
                 src_line = src_line.split()
                 sample = {}
                 sample["src"] = src_line
+                sample["indices"] = i
                 examples.append(sample)
 
         with codecs.open(tgt_path, "r", "utf-8") as tgt_file:
@@ -326,24 +343,24 @@ class TMNMTDataset(ONMTDataset):
 
         with codecs.open(src_tgt_tm_path, "r", "utf-8") as src_tgt_tm_file:
             for i, src_tgt_tm_line in enumerate(src_tgt_tm_file):
-                 #print(src_tgt_tm_line)
-                 all_sents = re.split(r'\t', src_tgt_tm_line)
-                 print("nb of elements = "+str(len(all_sents)))
-                 examples[i]["tm_src"] = {}
-                 examples[i]["tm_tgt"] = {}
-                 for k in range(0, opt.nb_tms):
+                all_sents = re.split(r'\t', src_tgt_tm_line)
+                examples[i]["tm_src"] = {}
+                examples[i]["tm_tgt"] = {}
+                for k in range(0, opt.nb_tms):
                      src_sent = all_sents[k].split()
                      tgt_sent = all_sents[k+opt.nb_tms].split()
                      examples[i]["tm_src"][k] = src_sent
                      examples[i]["tm_tgt"][k] = tgt_sent
             keys = examples[0].keys()
             fields = [(k, fields[k]) for k in keys]
-            examples = list([torchtext.data.Example.fromlist([ex[k] for k in keys],
-                                                         fields)
-                             for ex in examples])
+
+            examples = list([TMExample.fromlist([ex[k] for k in keys],
+                                                         fields, opt.nb_tms)
+                            for ex in examples])
 
         super(ONMTDataset, self).__init__(examples, fields, None)
 
+            
     @staticmethod
     def get_fields(ntms, nFeatures=0):
         fields = ONMTDataset.get_fields(nFeatures)
@@ -357,7 +374,31 @@ class TMNMTDataset(ONMTDataset):
             init_token=BOS_WORD, eos_token=EOS_WORD,
             pad_token=PAD_WORD))
         return fields
-                 
+    
+    @staticmethod
+    def save_vocab(fields):
+        vocab = []
+        for k, f in fields.items():
+            if k not in ['tm_src', 'tm_tgt']:
+                if 'vocab' in f.__dict__:
+                    f.vocab.stoi = dict(f.vocab.stoi)
+                    vocab.append((k, f.vocab))
+        return vocab
+
+    # @staticmethod
+    # def build_vocab(train, opt):
+    #     fields = train.fields
+    #     fields["src"].build_vocab(train, max_size=opt.src_vocab_size,
+    #                               min_freq=opt.src_words_min_frequency)
+    #     fields["tgt"].build_vocab(train, max_size=opt.tgt_vocab_size,
+    #                               min_freq=opt.tgt_words_min_frequency)
+        # for k in range(0, opt.nb_tms):
+        #     fields["tm_src"][k].build_vocab(train, max_size=opt.src_vocab_size,
+        #                           min_freq=opt.src_words_min_frequency)
+        #     fields["tm_tgt"][k].build_vocab(train, max_size=opt.tgt_vocab_size,
+        #                           min_freq=opt.tgt_words_min_frequency)
+            
+
     
 def loadImageLibs():
     "Conditional import of torch image libs."

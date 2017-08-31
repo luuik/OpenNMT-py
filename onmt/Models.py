@@ -428,14 +428,16 @@ class Decoder(nn.Module):
         return outputs, state, attns, hidden_states
 
 
+class TM_NMTModel_shallow(TM_NMTModel):
+    pass
+
+
 class TM_NMTModel(nn.Module):
     def __init__(self, nmt_model, opt, fields, multigpu=False):
         self.multigpu = multigpu
         super(TM_NMTModel, self).__init__()
         self.nmt_model = nmt_model
 
-        # TODO: initialize attention tensor, gating parameter, coverage_parameter - done!
-        #--------------- Lena begin -----------------------
         self.coverage_penalty_weight = nn.Parameter(torch.FloatTensor(torch.randn(1)))   # parameter lambda from the paper
 
         for param in self.nmt_model.parameters():   # guarantee that these weights are not updated
@@ -444,25 +446,15 @@ class TM_NMTModel(nn.Module):
         self.enc_rnn_size = self.nmt_model.encoder.hidden_size * self.nmt_model.encoder.num_directions
 
         self.attn = onmt.modules.GlobalAttention(      # initialize attention
-            dim = self.enc_rnn_size,    # the same size as in the original attention (the size of c_t)
+            dim=self.enc_rnn_size,    # the same size as in the original attention (the size of c_t)
             attn_type=opt.global_attention    # it should be "general" if we want it to be like in the paper
         )
 
         self.gate = Gate(self.enc_rnn_size + 2 * self.nmt_model.decoder.hidden_size, # input_size
                          self.nmt_model.decoder.hidden_size)  # output_size
 
-        #------------------- Lena end -------------------
-
-        # TODO: initialise the key-value memory
-        self.keyvalue_memory = None
-
-        # generator - why should we define/redefine this? take a proper look at it
-        # self.generator = nn.Sequential(
-        #     nn.Linear(self.enc_rnn_size, len(fields["tgt"].vocab)),
-        #     nn.LogSoftmax())
         self.generator = self.nmt_model.generator
 
-    #-------------- Lena begin -----------------------
     def _fix_enc_hidden(self, h):
         """
         The encoder hidden is  (layers*directions) x batch x dim
@@ -497,8 +489,6 @@ class TM_NMTModel(nn.Module):
                 attns: Dictionary of (src_len x batch)
         """
 
-        #------------- similar info begin ----------
-
         # here we obtain c_tau, h_tau for each similar sentence
          input = input[:-1]
          c_tau = []
@@ -515,42 +505,22 @@ class TM_NMTModel(nn.Module):
              c_tau += [torch.bmm(sim_attns["std"].transpose(0, 1), # b x tgtL x srcL
                                  sim_context.transpose(0, 1))] # b x srcL x rnn_size -> b x tgtL x rnn_size
 
-         # print 'len(c_tau) = %d' % len(c_tau), 'len(h_tau) = %d' % len(h_tau)
-         # print c_tau[0].size()
-         # print h_tau[0].size()
-
-        #------------- similar info end -----------
          # CHECKS
          t_len, n_batch = input.size()
          s_len, n_batch_, _ = src.size()
-         #s_len_, n_batch__, _ = context.size() - DELETE
-         #aeq(n_batch, n_batch_, n_batch__) - DELETE
-         # aeq(s_len, s_len_)
-         # END CHECKS
          assert (self.nmt_model.decoder.decoder_type == "rnn"), (
              "TM_NMT_Model supports the rnn decoder only"
          )
 
          emb = self.nmt_model.decoder.embeddings(input.unsqueeze(2))
 
-         # n.b. you can increase performance if you compute W_ih * x for all
-         # iterations in parallel, but that's only possible if
-         # self.input_feed=False
          outputs = []
 
          # Setup the different types of attention.
          attns = {"std": []}
-         # if self._copy:
-         #     attns["copy"] = []
-         # if self._coverage:
-         #     attns["coverage"] = []
-
-         #-------- Katya
-
          enc_hidden, context = self.nmt_model.encoder(src, lengths)
          if state is None:
              state = self.init_decoder_state(context, enc_hidden)
-         #-------- Katya
 
          assert isinstance(state, RNNDecoderState)
          output = state.input_feed.squeeze(0)
@@ -560,12 +530,7 @@ class TM_NMTModel(nn.Module):
          aeq(n_batch, n_batch_)
          # END CHECKS
 
-         # coverage = state.coverage.squeeze(0) \
-         #     if state.coverage is not None else None
-
-         #--------
-         # init coverage info
-         #--------
+         coverage_penalty = torch.zeros(n_batch, t_len, s_len)
 
          # Standard RNN decoder.
          enc_hidden, context = self.nmt_model.encoder(src, lengths)
@@ -580,13 +545,12 @@ class TM_NMTModel(nn.Module):
                                            context.transpose(0, 1))
 
              # receive \tilde(c_t) from the paper from similar sentences
-             #-------????????
              attn_output_sim, attn_sim = self.attn(attn_output, # this is c_t
                                                    torch.stack([sim_context.transpose(0, 1)[i] for sim_context in c_tau]).transpose(0, 1),
                                                    # tgtL x b x rnn_size -> tgtL x b x rnn_size
-                                                   values=torch.stack([sim_hidden.transpose(0, 1)[i] for sim_hidden in h_tau]).transpose(0, 1)
+                                                   values=torch.stack([sim_hidden.transpose(0, 1)[i] for sim_hidden in h_tau]).transpose(0, 1),
                                                    # tgtL x b x rnn_size -> tgtL x b x rnn_size
-                                                   # ------- give coverage info
+                                                   penalty=self.coverage_penalty_weight * coverage_penalty
                                                    )
              h_1 = hidden[1][0]
              z = self.gate(torch.cat((attn_output,  # c_t
@@ -596,33 +560,15 @@ class TM_NMTModel(nn.Module):
              gate_res = z * attn_output_sim + (1 - z) * h_1
              new_hidden = (hidden[0], (gate_res, hidden[1][1]))
 
-             #--------
              # update coverage info
-             # attns += ...
-             # gating += ...
-             #--------
+             coverage_penalty += (attn_sim.unsqueeze(1) if len(attn_sim.size() == 2) else attn_sim) * z
+
              rnn_output, hidden = self.nmt_model.decoder.rnn(emb_t, new_hidden)
              attn_output, attn = self.attn(rnn_output,
                                            context.transpose(0, 1))
 
-#-----------------???????????????????????
-
-             # output = self.dropout(attn_output)
              outputs += [attn_output]
              attns["std"] += [attn]
-             # hidden_states += [hidden[1][0]]
-
-             # COVERAGE
-             # if self._coverage:
-             #     coverage = coverage + attn \
-             #         if coverage is not None else attn
-             #     attns["coverage"] += [coverage]
-
-             # COPY
-             # if self._copy:
-             #     _, copy_attn = self.copy_attn(output,
-             #                                   context.transpose(0, 1))
-             #     attns["copy"] += [copy_attn]
 
          coverage = None
          state = RNNDecoderState(hidden, output.unsqueeze(0),
@@ -631,12 +577,8 @@ class TM_NMTModel(nn.Module):
          outputs = torch.stack(outputs)
          for k in attns:
              attns[k] = torch.stack(attns[k])
-         # hidden_states = torch.stack(hidden_states)
 
-         # print 'Forward outputs size', outputs.size()
          return outputs, attns, state
-
-         #------------------- Lena end -------------------------
 
 
 class NMTModel(nn.Module):

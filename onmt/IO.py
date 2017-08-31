@@ -4,6 +4,7 @@ import codecs
 import torchtext.data
 import torchtext.vocab
 from collections import Counter, defaultdict
+import re
 
 PAD_WORD = '<blank>'
 UNK = 0
@@ -82,7 +83,7 @@ class OrderedIterator(torchtext.data.Iterator):
                                           self.batch_size_fn):
                 self.batches.append(sorted(b, key=self.sort_key))
 
-
+                
 class ONMTDataset(torchtext.data.Dataset):
     """Defines a dataset for machine translation."""
 
@@ -304,6 +305,60 @@ class ONMTDataset(torchtext.data.Dataset):
             fields["tgt"].vocab = merged_vocab
 
 
+class TMNMTDataset(ONMTDataset):
+    def __init__(self, src_path, tgt_path, src_tgt_tm_path, fields, opt,
+                 src_img_dir=None, **kwargs):
+        examples = []
+        src_words = []
+        self.src_vocabs = []
+        
+        with codecs.open(src_path, "r", "utf-8") as src_file:
+            for i, src_line in enumerate(src_file):
+                src_line = src_line.split()
+                sample = {}
+                sample["src"] = src_line
+                examples.append(sample)
+
+        with codecs.open(tgt_path, "r", "utf-8") as tgt_file:
+             for i, tgt_line in enumerate(tgt_file):
+                 tgt_line = tgt_line.split()
+                 examples[i]["tgt"] = tgt_line
+
+        with codecs.open(src_tgt_tm_path, "r", "utf-8") as src_tgt_tm_file:
+            for i, src_tgt_tm_line in enumerate(src_tgt_tm_file):
+                 #print(src_tgt_tm_line)
+                 all_sents = re.split(r'\t', src_tgt_tm_line)
+                 print("nb of elements = "+str(len(all_sents)))
+                 examples[i]["tm_src"] = {}
+                 examples[i]["tm_tgt"] = {}
+                 for k in range(0, opt.nb_tms):
+                     src_sent = all_sents[k].split()
+                     tgt_sent = all_sents[k+opt.nb_tms].split()
+                     examples[i]["tm_src"][k] = src_sent
+                     examples[i]["tm_tgt"][k] = tgt_sent
+            keys = examples[0].keys()
+            fields = [(k, fields[k]) for k in keys]
+            examples = list([torchtext.data.Example.fromlist([ex[k] for k in keys],
+                                                         fields)
+                             for ex in examples])
+
+        super(ONMTDataset, self).__init__(examples, fields, None)
+
+    @staticmethod
+    def get_fields(ntms, nFeatures=0):
+        fields = ONMTDataset.get_fields(nFeatures)
+        fields["tm_src"] = []
+        fields["tm_tgt"] = []
+        for k in range(0, ntms):
+            fields["tm_src"].append(torchtext.data.Field(
+            init_token=BOS_WORD, eos_token=EOS_WORD,
+            pad_token=PAD_WORD))
+            fields["tm_tgt"].append(torchtext.data.Field(
+            init_token=BOS_WORD, eos_token=EOS_WORD,
+            pad_token=PAD_WORD))
+        return fields
+                 
+    
 def loadImageLibs():
     "Conditional import of torch image libs."
     global Image, transforms

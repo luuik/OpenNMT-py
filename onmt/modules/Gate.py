@@ -94,7 +94,7 @@ class BothContextGate(nn.Module):
 #------------- Lena begin -----------------
 
 class Gate(nn.Module):
-"""Simple gate"""
+    """Simple gate"""
 
     def __init__(self, input_size, output_size):
         super(Gate, self).__init__()

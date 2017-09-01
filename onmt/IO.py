@@ -12,6 +12,7 @@ BOS_WORD = '<s>'
 EOS_WORD = '</s>'
 
 
+
 def extractFeatures(tokens):
     "Given a list of token separate out words and features (if any)."
     words = []
@@ -316,9 +317,7 @@ class TMNMTDataset(ONMTDataset):
         with codecs.open(src_path, "r", "utf-8") as src_file:
             for i, src_line in enumerate(src_file):
                 src_line = src_line.split()
-                sample = {}
-                sample["src"] = src_line
-                sample["indices"] = i
+                sample = {"src": src_line, "indices": i}
                 examples.append(sample)
 
         with codecs.open(tgt_path, "r", "utf-8") as tgt_file:
@@ -334,7 +333,6 @@ class TMNMTDataset(ONMTDataset):
                     examples[i]["tm_tgt_"+str(k)] = [PAD_WORD] * 2
                 max_sz_src = max(len(src_tm.split()) for src_tm in all_sents[:opt.nb_tms])
                 max_sz_tgt = max(len(tgt_tm.split()) for tgt_tm in all_sents[opt.nb_tms:2*opt.nb_tms])
-
                 for k in range(opt.nb_tms):
                      src_sent = all_sents[k].split()
                      padding = [PAD_WORD] * (max_sz_src - len(src_sent))
@@ -352,6 +350,7 @@ class TMNMTDataset(ONMTDataset):
             examples = list([torchtext.data.Example.fromlist([ex[k] for k in keys],
                                                              fields)
                              for ex in examples])
+
         super(ONMTDataset, self).__init__(examples, fields, None)
 
             
@@ -360,8 +359,8 @@ class TMNMTDataset(ONMTDataset):
         fields = ONMTDataset.get_fields(nFeatures)
         for k in range(ntms):
             fields["tm_src_"+str(k)] = torchtext.data.Field(
-                init_token=BOS_WORD, eos_token=EOS_WORD,
-                pad_token=PAD_WORD)
+                pad_token=PAD_WORD,
+                include_lengths=True)
             fields["tm_tgt_"+str(k)] = torchtext.data.Field(
                 init_token=BOS_WORD, eos_token=EOS_WORD,
                 pad_token=PAD_WORD)
@@ -384,9 +383,6 @@ class TMNMTDataset(ONMTDataset):
         tm_length = []
         for k in range(nbtms):
             cat = [batch.__dict__["tm_src_"+str(k)][0]]
-            # loic: something's wrong here- which size of tensor should we get?
-            #TODO
-            print(str(cat))
             cat = [c.unsqueeze(2) for c in cat]
             src = torch.cat(cat, 2)
             length = batch.__dict__["tm_src_"+str(k)][1]
@@ -406,18 +402,6 @@ class TMNMTDataset(ONMTDataset):
             v.stoi = defaultdict(lambda: 0, v.stoi)
             fields[k].vocab = v
         return fields
-
-    # @staticmethod
-    # def save_vocab(fields):
-    #     vocab = []
-    #     for k, f in fields.items():
-    #         if k not in ['tm_src', 'tm_tgt']:
-    #             if 'vocab' in f.__dict__:
-    #                 f.vocab.stoi = dict(f.vocab.stoi)
-    #                 vocab.append((k, f.vocab))
-    #     return vocab
-
-            
 
     
 def loadImageLibs():

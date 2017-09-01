@@ -121,7 +121,7 @@ def trainModel(model, trainData, validData, fields, optim):
             trunc_size = opt.truncated_decoder if opt.truncated_decoder \
                 else target_size
 
-            tm_src, tm_tgt, tm_len = onmt.IO.TMNMTDataset.make_tm_batches(batch, fields, opt.nb_tms)
+            tm_src, tm_tgt, tm_lengths = onmt.IO.TMNMTDataset.make_tm_batches(batch, fields, opt.nb_tms)
 
             for j in range(0, target_size-1, trunc_size):
                 # (1) Create truncated target.
@@ -133,7 +133,7 @@ def trainModel(model, trainData, validData, fields, optim):
                 # Main training loop
                 model.zero_grad()
                 outputs, attn, dec_state = \
-                    model(src, tgt, [src, src], [tgt, tgt], src_lengths, dec_state)
+                    model(src, tgt, tm_src, tm_tgt, src_lengths, dec_state)
 
                 # (2) F-prop/B-prob generator in shards for memory
                 # efficiency.
@@ -262,6 +262,8 @@ def main():
 
     TM_NMTModel = onmt.Models.TM_NMTModel(BaseNMTModel, opt, fields, multigpu=len(opt.gpuid) > 1)
 
+    print(TM_NMTModel)
+    
     if opt.param_init != 0.0:
         print('Intializing params')
         for p in TM_NMTModel.parameters():

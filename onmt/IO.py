@@ -211,9 +211,10 @@ class ONMTDataset(torchtext.data.Dataset):
         fields = ONMTDataset.get_fields(
             len(ONMTDataset.collect_features(vocab)))
         for k, v in vocab.items():
-            # Hack. Can't pickle defaultdict :(
-            v.stoi = defaultdict(lambda: 0, v.stoi)
-            fields[k].vocab = v
+            if k in fields.keys():
+                # Hack. Can't pickle defaultdict :(
+                v.stoi = defaultdict(lambda: 0, v.stoi)
+                fields[k].vocab = v
         return fields
 
     @staticmethod

@@ -374,11 +374,27 @@ class TMNMTDataset(ONMTDataset):
     def build_vocab(train, opt):
         ONMTDataset.build_vocab(train, opt)
         fields = train.fields
+        src_vocabs_to_merge = [fields["src"].vocab]
+        tgt_vocabs_to_merge = [fields["tgt"].vocab]
         for k in range(opt.nb_tms):
             fields["tm_src_"+str(k)].build_vocab(train, max_size=opt.src_vocab_size,
                                       min_freq=opt.src_words_min_frequency)
             fields["tm_tgt_"+str(k)].build_vocab(train, max_size=opt.tgt_vocab_size,
                                       min_freq=opt.tgt_words_min_frequency)
+            src_vocabs_to_merge.append(fields["tm_src_"+str(k)].vocab)
+            tgt_vocabs_to_merge.append(fields["tm_tgt_"+str(k)].vocab)
+        # merge_vocabs
+        src_merged_vocab = merge_vocabs(
+                src_vocabs_to_merge,
+                vocab_size=opt.src_vocab_size)
+        tgt_merged_vocab = merge_vocabs(
+                tgt_vocabs_to_merge,
+                vocab_size=opt.tgt_vocab_size)
+        fields["src"].vocab = src_merged_vocab
+        fields["tgt"].vocab = tgt_merged_vocab
+        for k in range(opt.nb_tms):
+            fields["tm_src_"+str(k)].vocab = src_merged_vocab
+            fields["tm_tgt_"+str(k)].vocab = tgt_merged_vocab
 
     @staticmethod
     def make_tm_batches(batch, fields, nbtms):

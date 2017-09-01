@@ -16,6 +16,10 @@ parser = argparse.ArgumentParser(description='train.py')
 # Data and loading options
 parser.add_argument('-data', required=True,
                     help='Path to the *-train.pt file from preprocess.py')
+# TM-nmt option
+parser.add_argument('-nb_tms', type=int, default=4,
+                    help='Number of retrieved segment pairs in TM.')
+
 
 # opts.py
 opts.add_md_help_argument(parser)
@@ -117,6 +121,8 @@ def trainModel(model, trainData, validData, fields, optim):
             trunc_size = opt.truncated_decoder if opt.truncated_decoder \
                 else target_size
 
+            tm_src, tm_tgt, tm_len = onmt.IO.TMNMTDataset.make_tm_batches(batch, fields, opt.nb_tms)
+
             for j in range(0, target_size-1, trunc_size):
                 # (1) Create truncated target.
                 tgt_r = (j, j + trunc_size)
@@ -217,8 +223,8 @@ def main():
     print("Loading data from '%s'" % opt.data)
 
     train = torch.load(opt.data + '.train.pt')
-    fields = onmt.IO.ONMTDataset.load_fields(
-        torch.load(opt.data + '.vocab.pt'))
+    fields = onmt.IO.TMNMTDataset.load_fields(
+        torch.load(opt.data + '.vocab.pt'), opt.nb_tms)
     valid = torch.load(opt.data + '.valid.pt')
     fields = dict([(k, f) for (k, f) in fields.items()
                    if k in train.examples[0].__dict__])

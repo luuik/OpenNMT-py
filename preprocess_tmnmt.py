@@ -25,6 +25,8 @@ parser.add_argument('-train_tgt', required=True,
                     help="Path to the training target data")
 parser.add_argument('-train_tm', required=True,
                     help="Path to the training tm file")
+parser.add_argument('-valid_tm', required=True,
+                    help="Path to the training tm file")
 parser.add_argument('-nb_tms', type=int, default=4,
                     help="Number of retrieved TM pairs per example")
 parser.add_argument('-valid_src', required=True,
@@ -59,13 +61,13 @@ def main():
     print("Building Vocab...")
     onmt.IO.TMNMTDataset.build_vocab(train, opt)
     print("Building Valid...")
-    valid_fields = onmt.IO.ONMTDataset.get_fields(0)
-    valid = onmt.IO.ONMTDataset(opt.valid_src, opt.valid_tgt, valid_fields, opt)
+    valid = onmt.IO.TMNMTDataset(opt.valid_src, opt.valid_tgt, opt.valid_tm, fields, opt)
     print("Saving train/valid/fields")
 
     # Can't save fields, so remove/reconstruct at training time.
     torch.save(onmt.IO.TMNMTDataset.save_vocab(fields),
                open(opt.save_data + '.vocab.pt', 'wb'))
+
     train.fields = []
     valid.fields = []
     torch.save(train, open(opt.save_data + '.train.pt', 'wb'))

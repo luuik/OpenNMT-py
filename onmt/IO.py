@@ -304,21 +304,6 @@ class ONMTDataset(torchtext.data.Dataset):
             fields["src"].vocab = merged_vocab
             fields["tgt"].vocab = merged_vocab
 
-    
-class TMExample(torchtext.data.Example):
-    @classmethod
-    def fromlist(cls, data, fields, ntms):
-        ex = cls()
-        for (name, field), val in zip(fields, data):
-            if field is not None:
-                if name == "tm_src" or name == "tm_tgt":
-                    listval = []
-                    for k in range(0, ntms):
-                        listval.append(field[k].preprocess(val[k]))
-                    setattr(ex, name, listval)
-                else:
-                    setattr(ex, name, field.preprocess(val))
-        return ex
 
 class TMNMTDataset(ONMTDataset):
     def __init__(self, src_path, tgt_path, src_tgt_tm_path, fields, opt,
@@ -344,59 +329,94 @@ class TMNMTDataset(ONMTDataset):
         with codecs.open(src_tgt_tm_path, "r", "utf-8") as src_tgt_tm_file:
             for i, src_tgt_tm_line in enumerate(src_tgt_tm_file):
                 all_sents = re.split(r'\t', src_tgt_tm_line)
-                examples[i]["tm_src"] = {}
-                examples[i]["tm_tgt"] = {}
-                for k in range(0, opt.nb_tms):
+                for k in range(opt.nb_tms):
+                    examples[i]["tm_src_"+str(k)] = [PAD_WORD] * 2
+                    examples[i]["tm_tgt_"+str(k)] = [PAD_WORD] * 2
+                max_sz_src = max(len(src_tm.split()) for src_tm in all_sents[:opt.nb_tms])
+                max_sz_tgt = max(len(tgt_tm.split()) for tgt_tm in all_sents[opt.nb_tms:2*opt.nb_tms])
+
+                for k in range(opt.nb_tms):
                      src_sent = all_sents[k].split()
+                     padding = [PAD_WORD] * (max_sz_src - len(src_sent))
+                     src_sent_padded = src_sent
+                     src_sent_padded.extend(padding)
                      tgt_sent = all_sents[k+opt.nb_tms].split()
-                     examples[i]["tm_src"][k] = src_sent
-                     examples[i]["tm_tgt"][k] = tgt_sent
+                     padding = [PAD_WORD] * (max_sz_tgt - len(tgt_sent))
+                     tgt_sent_padded = tgt_sent
+                     tgt_sent_padded.extend(padding)
+                     examples[i]["tm_src_"+str(k)] = src_sent_padded
+                     examples[i]["tm_tgt_"+str(k)] = tgt_sent_padded
             keys = examples[0].keys()
             fields = [(k, fields[k]) for k in keys]
 
-            examples = list([TMExample.fromlist([ex[k] for k in keys],
-                                                         fields, opt.nb_tms)
-                            for ex in examples])
-
+            examples = list([torchtext.data.Example.fromlist([ex[k] for k in keys],
+                                                             fields)
+                             for ex in examples])
         super(ONMTDataset, self).__init__(examples, fields, None)
 
             
     @staticmethod
     def get_fields(ntms, nFeatures=0):
         fields = ONMTDataset.get_fields(nFeatures)
-        fields["tm_src"] = []
-        fields["tm_tgt"] = []
-        for k in range(0, ntms):
-            fields["tm_src"].append(torchtext.data.Field(
-            init_token=BOS_WORD, eos_token=EOS_WORD,
-            pad_token=PAD_WORD))
-            fields["tm_tgt"].append(torchtext.data.Field(
-            init_token=BOS_WORD, eos_token=EOS_WORD,
-            pad_token=PAD_WORD))
+        for k in range(ntms):
+            fields["tm_src_"+str(k)] = torchtext.data.Field(
+                init_token=BOS_WORD, eos_token=EOS_WORD,
+                pad_token=PAD_WORD)
+            fields["tm_tgt_"+str(k)] = torchtext.data.Field(
+                init_token=BOS_WORD, eos_token=EOS_WORD,
+                pad_token=PAD_WORD)
         return fields
-    
+
     @staticmethod
-    def save_vocab(fields):
-        vocab = []
-        for k, f in fields.items():
-            if k not in ['tm_src', 'tm_tgt']:
-                if 'vocab' in f.__dict__:
-                    f.vocab.stoi = dict(f.vocab.stoi)
-                    vocab.append((k, f.vocab))
-        return vocab
+    def build_vocab(train, opt):
+        ONMTDataset.build_vocab(train, opt)
+        fields = train.fields
+        for k in range(opt.nb_tms):
+            fields["tm_src_"+str(k)].build_vocab(train, max_size=opt.src_vocab_size,
+                                      min_freq=opt.src_words_min_frequency)
+            fields["tm_tgt_"+str(k)].build_vocab(train, max_size=opt.tgt_vocab_size,
+                                      min_freq=opt.tgt_words_min_frequency)
+
+    @staticmethod
+    def make_tm_batches(batch, fields, nbtms):
+        tm_src = []
+        tm_tgt = []
+        tm_length = []
+        for k in range(nbtms):
+            cat = [batch.__dict__["tm_src_"+str(k)][0]]
+            # loic: something's wrong here- which size of tensor should we get?
+            #TODO
+            print(str(cat))
+            cat = [c.unsqueeze(2) for c in cat]
+            src = torch.cat(cat, 2)
+            length = batch.__dict__["tm_src_"+str(k)][1]
+            tgt = batch.__dict__["tm_tgt_"+str(k)][1]
+            tm_src.append(src)
+            tm_tgt.append(tgt)
+            tm_length.append(length)
+        return tm_src, tm_tgt, tm_length
+
+    @staticmethod
+    def load_fields(vocab, nbtms):
+        vocab = dict(vocab)
+        fields = TMNMTDataset.get_fields(nbtms,
+            len(ONMTDataset.collect_features(vocab)))
+        for k, v in vocab.items():
+            # Hack. Can't pickle defaultdict :(
+            v.stoi = defaultdict(lambda: 0, v.stoi)
+            fields[k].vocab = v
+        return fields
 
     # @staticmethod
-    # def build_vocab(train, opt):
-    #     fields = train.fields
-    #     fields["src"].build_vocab(train, max_size=opt.src_vocab_size,
-    #                               min_freq=opt.src_words_min_frequency)
-    #     fields["tgt"].build_vocab(train, max_size=opt.tgt_vocab_size,
-    #                               min_freq=opt.tgt_words_min_frequency)
-        # for k in range(0, opt.nb_tms):
-        #     fields["tm_src"][k].build_vocab(train, max_size=opt.src_vocab_size,
-        #                           min_freq=opt.src_words_min_frequency)
-        #     fields["tm_tgt"][k].build_vocab(train, max_size=opt.tgt_vocab_size,
-        #                           min_freq=opt.tgt_words_min_frequency)
+    # def save_vocab(fields):
+    #     vocab = []
+    #     for k, f in fields.items():
+    #         if k not in ['tm_src', 'tm_tgt']:
+    #             if 'vocab' in f.__dict__:
+    #                 f.vocab.stoi = dict(f.vocab.stoi)
+    #                 vocab.append((k, f.vocab))
+    #     return vocab
+
             
 
     

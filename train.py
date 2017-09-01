@@ -68,7 +68,7 @@ def eval(model, criterion, data, fields):
     for batch in validData:
         _, src_lengths = batch.src
         src = onmt.IO.make_features(batch, fields)
-        outputs, attn, _ = model(src, batch.tgt, src_lengths)
+        outputs, attn, _ , _ = model(src, batch.tgt, src_lengths)
         gen_state = loss.makeLossBatch(outputs, batch, attn,
                                        (0, batch.tgt.size(0)))
         _, batch_stats = loss.computeLoss(batch=batch, **gen_state)
@@ -135,7 +135,6 @@ def trainModel(model, trainData, validData, fields, optim):
                 # print outputs, batch, attn
                 gen_state = closs.makeLossBatch(outputs, batch, attn,
                                                 tgt_r)
-                print gen_state
                 for shard in splitter.splitIter(gen_state):
 
                     # Compute loss and backprop shard.

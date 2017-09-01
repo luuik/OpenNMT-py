@@ -380,16 +380,14 @@ class TMNMTDataset(ONMTDataset):
     def make_tm_batches(batch, fields, nbtms):
         tm_src = []
         tm_tgt = []
-        tm_length = []
         for k in range(nbtms):
             cat = [batch.__dict__["tm_src_"+str(k)][0]]
             cat = [c.unsqueeze(2) for c in cat]
             src = torch.cat(cat, 2)
-            length = batch.__dict__["tm_src_"+str(k)][1]
             tgt = batch.__dict__["tm_tgt_"+str(k)][1]
             tm_src.append(src)
             tm_tgt.append(tgt)
-            tm_length.append(length)
+        tm_length = batch.__dict__["tm_src_0"][1]
         return tm_src, tm_tgt, tm_length
 
     @staticmethod

@@ -114,6 +114,7 @@ def trainModel(model, trainData, validData, fields, optim):
 
             dec_state = None
             _, src_lengths = batch.src
+            #print(str(type(src_lengths)))
             src = onmt.IO.make_features(batch, fields)
             report_stats.n_src_words += src_lengths.sum()
 
@@ -121,7 +122,7 @@ def trainModel(model, trainData, validData, fields, optim):
             trunc_size = opt.truncated_decoder if opt.truncated_decoder \
                 else target_size
 
-            tm_src, tm_tgt, tm_lengths = onmt.IO.TMNMTDataset.make_tm_batches(batch, fields, opt.nb_tms)
+            tm_src, tm_tgt = onmt.IO.TMNMTDataset.make_tm_batches(batch, fields, opt.nb_tms)
 
             for j in range(0, target_size-1, trunc_size):
                 # (1) Create truncated target.

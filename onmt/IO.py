@@ -313,16 +313,20 @@ class TMNMTDataset(ONMTDataset):
         src_words = []
         self.src_vocabs = []
         self.nfeatures = 0
-        
+
+        src_len = []
         with codecs.open(src_path, "r", "utf-8") as src_file:
             for i, src_line in enumerate(src_file):
                 src_line = src_line.split()
+                src_len.append(len(src_line))
                 sample = {"src": src_line, "indices": i}
                 examples.append(sample)
 
+        tgt_len = []
         with codecs.open(tgt_path, "r", "utf-8") as tgt_file:
              for i, tgt_line in enumerate(tgt_file):
                  tgt_line = tgt_line.split()
+                 tgt_len.append(len(tgt_line))
                  examples[i]["tgt"] = tgt_line
 
         with codecs.open(src_tgt_tm_path, "r", "utf-8") as src_tgt_tm_file:
@@ -331,8 +335,8 @@ class TMNMTDataset(ONMTDataset):
                 for k in range(opt.nb_tms):
                     examples[i]["tm_src_"+str(k)] = [PAD_WORD] * 2
                     examples[i]["tm_tgt_"+str(k)] = [PAD_WORD] * 2
-                max_sz_src = max(len(src_tm.split()) for src_tm in all_sents[:opt.nb_tms])
-                max_sz_tgt = max(len(tgt_tm.split()) for tgt_tm in all_sents[opt.nb_tms:2*opt.nb_tms])
+                max_sz_src = max(max(len(src_tm.split()) for src_tm in all_sents[:opt.nb_tms]), src_len[i])
+                max_sz_tgt = max(max(len(tgt_tm.split()) for tgt_tm in all_sents[opt.nb_tms:2*opt.nb_tms]), tgt_len[i])
                 for k in range(opt.nb_tms):
                      src_sent = all_sents[k].split()
                      padding = [PAD_WORD] * (max_sz_src - len(src_sent))
@@ -387,8 +391,7 @@ class TMNMTDataset(ONMTDataset):
             tgt = batch.__dict__["tm_tgt_"+str(k)][1]
             tm_src.append(src)
             tm_tgt.append(tgt)
-        tm_length = batch.__dict__["tm_src_0"][1]
-        return tm_src, tm_tgt, tm_length
+        return tm_src, tm_tgt
 
     @staticmethod
     def load_fields(vocab, nbtms):

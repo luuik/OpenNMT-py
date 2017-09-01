@@ -111,14 +111,16 @@ class GlobalAttention(nn.Module):
         context (FloatTensor): batch x src_len x dim: src hidden states
         coverage (FloatTensor): None (not supported yet)
         """
-
+        if penalty is not None:
+            assert penalty.size()[0] == input.size()[0], "Penalty shape[0] in Attention must be equal to batch size"
+            assert penalty.size()[1] == input.size()[1], "Penalty shape[1] in Attention must be equal to tgtL"
+            assert penalty.size()[2] == context.size()[1], "Penalty shape[2] in Attention must be equal to srcL"
         # one step input
         if input.dim() == 2:
             one_step = True
             input = input.unsqueeze(1)
         else:
             one_step = False
-
         batch, sourceL, dim = context.size()
         batch_, targetL, dim_ = input.size()
         aeq(batch, batch_)

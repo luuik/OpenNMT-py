@@ -72,7 +72,7 @@ def eval(model, criterion, data, fields):
     for batch in validData:
         _, src_lengths = batch.src
         src = onmt.IO.make_features(batch, fields)
-        outputs, attn, _ = model(src, batch.tgt, src_lengths)
+        outputs, attn, _ = model(src, batch.tgt, [src, src], [batch.tgt, batch.tgt], src_lengths)
         gen_state = loss.makeLossBatch(outputs, batch, attn,
                                        (0, batch.tgt.size(0)))
         _, batch_stats = loss.computeLoss(batch=batch, **gen_state)
@@ -138,14 +138,11 @@ def trainModel(model, trainData, validData, fields, optim):
                 # (2) F-prop/B-prob generator in shards for memory
                 # efficiency.
                 batch_stats = onmt.Loss.Statistics()
-                # print 'Train outputs size', outputs.size()
-                # print 'Train attns size', attn["std"].size()
                 gen_state = closs.makeLossBatch(outputs, batch, attn,
                                                 tgt_r)
                 for shard in splitter.splitIter(gen_state):
 
                     # Compute loss and backprop shard.
-                    # print shard
                     loss, stats = closs.computeLoss(batch=batch,
                                                     **shard)
                     loss.div(batch.batch_size).backward()

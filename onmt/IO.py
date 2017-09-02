@@ -405,9 +405,8 @@ class TMNMTDataset(ONMTDataset):
             cat = [batch.__dict__["tm_src_"+str(k)][0]]
             cat = [c.unsqueeze(2) for c in cat]
             src = torch.cat(cat, 2)
-            cat = [batch.__dict__["tm_tgt_"+str(k)]]
-            cat = [c.unsqueeze(2) for c in cat]
-            tgt = torch.cat(cat, 2)
+            cat = batch.__dict__["tm_tgt_"+str(k)]
+            tgt = cat
             tm_src.append(src)
             tm_tgt.append(tgt)
         return tm_src, tm_tgt
